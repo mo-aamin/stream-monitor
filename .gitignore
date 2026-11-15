@@ -38,8 +38,9 @@ cookies.txt
 *.rtf
 *.pdf
 
-# GitHub-facing readme: intentionally publishable.
-!README_github.md
+# Public GitHub / Docker Hub landing page: intentionally publishable.
+# Anchored to the repo root so only ./README.md is re-included.
+!/README.md
 
 # Editor / IDE
 .vs/
