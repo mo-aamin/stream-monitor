@@ -38,6 +38,9 @@ cookies.txt
 *.rtf
 *.pdf
 
+# GitHub-facing readme: intentionally publishable.
+!README_github.md
+
 # Editor / IDE
 .vs/
 .idea/
