@@ -27,6 +27,32 @@ Recordings are written straight to a folder you control.
 
 ---
 
+## Screenshots
+
+A look at the main views. Click any image to open it full size.
+
+**Dashboard** — live channels, active recordings, recent captures and runtime versions.
+
+[![Dashboard showing live channels, active recordings and runtime versions](screenshots/screenshot1.png)](screenshots/screenshot1.png)
+
+**Channels** — add channels individually or in bulk, with per-platform status.
+
+[![Channels page with the add form and channel list](screenshots/screenshot2.png)](screenshots/screenshot2.png)
+
+**Recordings** — recording history with status, duration, size, filters and actions.
+
+[![Recordings page with recording history and filters](screenshots/screenshot3.png)](screenshots/screenshot3.png)
+
+**Activity & Logs** — channel checks, settings changes and the application log.
+
+[![Activity and application log page](screenshots/screenshot4.png)](screenshots/screenshot4.png)
+
+**Settings** — tool paths, platform access, monitoring interval and recording options.
+
+[![Settings page with tool paths, platform access and recording options](screenshots/screenshot5.png)](screenshots/screenshot5.png)
+
+---
+
 ## Quick start
 
 You need Docker with the Compose v2 plugin (`docker compose version`), and a
