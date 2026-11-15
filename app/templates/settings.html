@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block title %}Settings · {{ app_name }}{% endblock %}
+
+{% block actions %}
+  <button class="btn ghost" type="button" data-action="refresh-versions">
+    <svg class="icon"><use href="#i-refresh"/></svg> Detect versions
+  </button>
+  <button class="btn primary" type="button" data-action="save-settings">
+    <svg class="icon"><use href="#i-check"/></svg> Save settings
+  </button>
+{% endblock %}
+
+{% block content %}
+<form id="settings-form" autocomplete="off">
+  <div class="settings-layout">
+
+    <section class="panel" id="tools">
+      <header class="panel-head">
+        <div>
+          <h2>Tools &amp; paths</h2>
+          <p class="panel-sub">Versions update after you save or press Test</p>
+        </div>
+        <span class="badge badge-neutral">Required</span>
+      </header>
+
+      <div class="tool-setting" data-version-key="ytdlp">
+        <div class="tool-setting-head">
+          <div><span class="tool-name">yt-dlp</span><span class="hint-inline">live checks &amp; downloads</span></div>
+          <span class="tool-value">Checking…</span>
+        </div>
+        <div class="input-with-button">
+          <input name="ytdlp_path" id="ytdlp-path" value="{{ settings.ytdlp_path }}" spellcheck="false">
+          <button class="btn ghost sm" type="button" data-action="test-tool" data-tool="ytdlp" data-input="ytdlp-path">Test</button>
+        </div>
+      </div>
+
+      <div class="tool-setting" data-version-key="deno">
+        <div class="tool-setting-head">
+          <div><span class="tool-name">Deno</span><span class="hint-inline">JavaScript runtime for YouTube</span></div>
+          <span class="tool-value">Checking…</span>
+        </div>
+        <div class="input-with-button">
+          <input name="deno_path" id="deno-path" value="{{ settings.deno_path }}" spellcheck="false">
+          <button class="btn ghost sm" type="button" data-action="test-tool" data-tool="deno" data-input="deno-path">Test</button>
+        </div>
+      </div>
+
+      <div class="tool-setting" data-version-key="ffmpeg">
+        <div class="tool-setting-head">
+          <div><span class="tool-name">FFmpeg</span><span class="hint-inline">muxing &amp; remuxing</span></div>
+          <span class="tool-value">Checking…</span>
+        </div>
+        <div class="input-with-button">
+          <input name="ffmpeg_path" id="ffmpeg-path" value="{{ settings.ffmpeg_path }}" spellcheck="false">
+          <button class="btn ghost sm" type="button" data-action="test-tool" data-tool="ffmpeg" data-input="ffmpeg-path">Test</button>
+        </div>
+      </div>
+
+      <div class="tool-setting" data-version-key="ffprobe">
+        <div class="tool-setting-head">
+          <div><span class="tool-name">FFprobe</span><span class="hint-inline">optional media inspection</span></div>
+          <span class="tool-value">Checking…</span>
+        </div>
+        <div class="input-with-button">
+          <input name="ffprobe_path" id="ffprobe-path" value="{{ settings.ffprobe_path }}" spellcheck="false">
+          <button class="btn ghost sm" type="button" data-action="test-tool" data-tool="ffprobe" data-input="ffprobe-path">Test</button>
+        </div>
+      </div>
+
+      <div class="version-meta">
+        <span>App <strong>v{{ app_version }}</strong></span>
+        <span>Python, curl-cffi and yt-dlp EJS are reported on the dashboard.</span>
+      </div>
+      <p class="hint">The Docker image bundles yt-dlp, Deno, FFmpeg and curl-cffi. Use these fields to point at a different binary mounted into the container.</p>
+    </section>
+
+    <section class="panel" id="impersonation">
+      <header class="panel-head">
+        <div>
+          <h2>Platform access</h2>
+          <p class="panel-sub">Impersonation, cookies and proxy</p>
+        </div>
+      </header>
+
+      <div class="field">
+        <label for="impersonate-target">Impersonate target</label>
+        <input name="impersonate_target" id="impersonate-target" value="{{ settings.impersonate_target }}"
+               list="impersonate-targets" spellcheck="false" placeholder="chrome">
+        <datalist id="impersonate-targets">
+          <option value="chrome"></option>
+          <option value="chrome:windows-10"></option>
+          <option value="chrome:macos-14"></option>
+          <option value="firefox"></option>
+          <option value="safari"></option>
+          <option value="edge"></option>
+        </datalist>
+        <p class="help">Passed as <code>--impersonate</code>. Kick normally requires <code>chrome</code>.</p>
+      </div>
+
+      <div class="checkbox-grid">
+        <label class="check-card">
+          <input type="checkbox" name="impersonate_youtube" {{ 'checked' if settings.impersonate_youtube }}>
+          <span><strong>YouTube</strong><small>Usually leave off; cookies help more</small></span>
+        </label>
+        <label class="check-card">
+          <input type="checkbox" name="impersonate_twitch" {{ 'checked' if settings.impersonate_twitch }}>
+          <span><strong>Twitch</strong><small>Recommended</small></span>
+        </label>
+        <label class="check-card">
+          <input type="checkbox" name="impersonate_kick" {{ 'checked' if settings.impersonate_kick }}>
+          <span><strong>Kick</strong><small>Required in most cases</small></span>
+        </label>
+        <label class="check-card">
+          <input type="checkbox" name="impersonate_rumble" {{ 'checked' if settings.impersonate_rumble }}>
+          <span><strong>Rumble</strong><small>Helps with Cloudflare</small></span>
+        </label>
+      </div>
+
+      <div class="inline-actions">
+        <button class="btn ghost sm" type="button" data-action="impersonate-targets">
+          <svg class="icon"><use href="#i-check"/></svg> Show installed impersonation targets
+        </button>
+      </div>
+      <pre id="impersonate-output" class="log-view small hidden"></pre>
+
+      <div class="field">
+        <label for="cookies-file">Cookies file <span class="optional">optional</span></label>
+        <input name="cookies_file" id="cookies-file" value="{{ settings.cookies_file }}" spellcheck="false"
+               placeholder="/data/cookies.txt">
+        <p class="help">Netscape-format cookies file for private, age-restricted or bot-checked streams.</p>
+      </div>
+
+      <div class="field">
+        <label for="proxy">Proxy <span class="optional">optional</span></label>
+        <input name="proxy" id="proxy" value="{{ settings.proxy }}" spellcheck="false"
+               placeholder="http://host:8080 or socks5://host:1080">
+        <p class="help">Credentials are hidden from logs.</p>
+      </div>
+    </section>
+
+    <section class="panel" id="monitoring">
+      <header class="panel-head">
+        <div>
+          <h2>Monitoring</h2>
+          <p class="panel-sub">How often channels are checked</p>
+        </div>
+      </header>
+
+      <label class="switch-row">
+        <span class="switch">
+          <input type="checkbox" name="monitor_enabled" {{ 'checked' if settings.monitor_enabled }}>
+          <span class="switch-track"></span>
+        </span>
+        <span class="switch-text"><strong>Monitoring enabled</strong><small>Pause automatic checks and new recordings. Active captures continue.</small></span>
+      </label>
+
+      <div class="form-grid two">
+        <div class="field">
+          <label for="check-interval">Check interval (seconds)</label>
+          <input type="number" name="check_interval" id="check-interval" value="{{ settings.check_interval }}" min="15" max="3600" required>
+          <p class="help">15–3600. Each channel is checked within a run.</p>
+        </div>
+        <div class="field">
+          <label for="check-timeout">Check timeout (seconds)</label>
+          <input type="number" name="check_timeout" id="check-timeout" value="{{ settings.check_timeout }}" min="20" max="600" required>
+        </div>
+      </div>
+      <div class="field">
+        <label for="retry-cooldown">Retry cooldown after failure (seconds)</label>
+        <input type="number" name="retry_cooldown" id="retry-cooldown" value="{{ settings.retry_cooldown }}" min="0" max="86400" required>
+        <p class="help">Prevents a failing stream from retrying in a tight loop.</p>
+      </div>
+    </section>
+
+    <section class="panel" id="recording">
+      <header class="panel-head">
+        <div>
+          <h2>Recording</h2>
+          <p class="panel-sub">Naming and yt-dlp options</p>
+        </div>
+      </header>
+
+      <p class="hint">Host recording folder is configured in <code>docker-compose.yml</code> (the <code>/recordings</code> volume); the container path stays <code>{{ recordings_path }}</code>.</p>
+
+      <div class="field">
+        <label for="filename-template">Filename template</label>
+        <input name="filename_template" id="filename-template" value="{{ settings.filename_template }}" spellcheck="false" required>
+        <p class="help">A <code>date - platform - channel - </code> prefix is added automatically. Must contain <code>%(ext)s</code>.</p>
+      </div>
+
+      <div class="form-grid two">
+        <div class="field">
+          <label for="merge-format">Merge output format</label>
+          <select name="merge_output_format" id="merge-format">
+            {% for value, label in [('mp4','MP4'), ('mkv','MKV'), ('webm','WebM'), ('','Let yt-dlp decide')] %}
+            <option value="{{ value }}" {{ 'selected' if settings.merge_output_format == value }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="format-selector">Format selector <span class="optional">optional</span></label>
+          <input name="format_selector" id="format-selector" value="{{ settings.format_selector }}" spellcheck="false" placeholder="bv*+ba/b">
+          <p class="help">Leave empty to let yt-dlp choose the best live format.</p>
+        </div>
+      </div>
+
+      <div class="checkbox-grid two">
+        <label class="check-card">
+          <input type="checkbox" name="youtube_live_from_start" {{ 'checked' if settings.youtube_live_from_start }}>
+          <span><strong>YouTube: live from start</strong><small>Pass <code>--live-from-start</code></small></span>
+        </label>
+        <label class="check-card">
+          <input type="checkbox" name="rumble_live_from_start" {{ 'checked' if settings.rumble_live_from_start }}>
+          <span><strong>Rumble: live from start</strong><small>Only if the stream supports it</small></span>
+        </label>
+        <label class="check-card">
+          <input type="checkbox" name="write_info_json" {{ 'checked' if settings.write_info_json }}>
+          <span><strong>Write info JSON</strong><small>Sidecar metadata for each recording</small></span>
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="extra-args">Extra yt-dlp arguments <span class="optional">optional</span></label>
+        <textarea name="extra_ytdlp_args" id="extra-args" rows="2" spellcheck="false" placeholder="--hls-use-mpegts">{{ settings.extra_ytdlp_args }}</textarea>
+        <p class="help">Shell-style splitting is applied. Added to recording commands only.</p>
+      </div>
+    </section>
+
+    <section class="panel" id="about">
+      <header class="panel-head"><div><h2>About this instance</h2><p class="panel-sub">Runtime information</p></div></header>
+      <dl class="meta-list">
+        <div><dt>Version</dt><dd>v{{ app_version }}</dd></div>
+        <div><dt>Time zone</dt><dd>{{ timezone }}</dd></div>
+        <div><dt>Data directory</dt><dd><code>{{ data_dir }}</code></dd></div>
+        <div><dt>Database</dt><dd><code>{{ database_path }}</code></dd></div>
+        <div><dt>Recordings path</dt><dd><code>{{ recordings_path }}</code></dd></div>
+        <div><dt>Recording logs</dt><dd><code>{{ recording_log_dir }}</code></dd></div>
+        <div><dt>App log</dt><dd><code>{{ app_log_path }}</code></dd></div>
+      </dl>
+      <p class="hint">This UI has no built-in login. Restrict access with a firewall, VPN, or an authenticating reverse proxy.</p>
+    </section>
+  </div>
+
+  <div class="save-bar">
+    <span class="save-note">Changes are stored in SQLite and applied on the next monitor cycle.</span>
+    <button class="btn primary" type="button" data-action="save-settings">
+      <svg class="icon"><use href="#i-check"/></svg> Save settings
+    </button>
+  </div>
+</form>
+{% endblock %}

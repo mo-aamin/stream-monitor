@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Activity &amp; Logs · {{ app_name }}{% endblock %}
+
+{% block actions %}
+  <label class="auto-refresh"><input type="checkbox" data-auto-refresh> Auto refresh</label>
+  <a class="btn ghost" href="/logs">
+    <svg class="icon"><use href="#i-refresh"/></svg> Refresh
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="log-layout">
+  <section class="panel">
+    <header class="panel-head">
+      <div>
+        <h2>Activity</h2>
+        <p class="panel-sub">Channel checks, recordings and settings changes</p>
+      </div>
+      <span class="count-pill">{{ events|length }}</span>
+    </header>
+
+    <div class="filter-chips compact" role="group" aria-label="Filter activity">
+      <button class="chip active" type="button" data-filter-level="all">All</button>
+      <button class="chip" type="button" data-filter-level="info">Info</button>
+      <button class="chip" type="button" data-filter-level="warning">Warning</button>
+      <button class="chip" type="button" data-filter-level="error">Error</button>
+    </div>
+
+    {% if events %}
+    <ul class="event-list scrollable" id="event-list">
+      {% for event in events %}
+      <li class="event event-{{ event.level }}" data-level="{{ event.level }}">
+        <span class="event-dot"></span>
+        <div class="event-body">
+          <p>{{ event.message }}</p>
+          <div class="event-meta">
+            <span class="event-category">{{ event.category }}</span>
+            <time data-ts="{{ event.created_at }}" title="{{ event.created_at|localtime }}">{{ event.created_at|localtime }}</time>
+          </div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="empty-state small hidden" id="event-no-results"><p>No events at this level.</p></div>
+    {% else %}
+    <div class="empty-state small"><p>No activity recorded yet.</p></div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <header class="panel-head">
+      <div>
+        <h2>Application log</h2>
+        <p class="panel-sub"><code>{{ app_log_path }}</code></p>
+      </div>
+    </header>
+    <pre class="log-view tall">{{ app_log or 'Log file is empty.' }}</pre>
+    <p class="hint">Per-recording yt-dlp output is stored in <code>{{ recording_log_path }}</code> and can be opened from the Recordings page.</p>
+  </section>
+</div>
+{% endblock %}

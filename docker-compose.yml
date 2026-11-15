@@ -1,0 +1,34 @@
+name: stream-monitor
+
+services:
+  stream-monitor:
+    build:
+      context: .
+      args:
+        DENO_VERSION: ${DENO_VERSION:-2.9.8}
+        YTDLP_VERSION: ${YTDLP_VERSION:-}
+    image: stream-monitor:latest
+    container_name: stream-monitor
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 120s
+    ports:
+      # Host port 8000 -> app port 8080 inside the container.
+      # Change 8000 to serve the web UI on a different host port.
+      - "8000:8080"
+    environment:
+      TZ: ${TZ:-America/Chicago}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      DATA_DIR: /data
+      RECORDINGS_DIR: /recordings
+      MONITOR_AUTOSTART: "true"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      # SQLite database and logs.
+      - ./data:/data
+      # Recorded video files. Change the host path on the left to use another
+      # folder (for example an absolute path to a NAS mount).
+      - ./recordings:/recordings
+    security_opt:
+      - no-new-privileges:true

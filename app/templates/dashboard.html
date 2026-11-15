@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard · {{ app_name }}{% endblock %}
+
+{% block actions %}
+  <label class="auto-refresh"><input type="checkbox" data-auto-refresh> Auto refresh</label>
+  <button class="btn ghost" type="button" data-action="monitor-toggle">
+    {% if monitor_state.state == 'running' %}
+      <svg class="icon"><use href="#i-pause"/></svg> Pause monitor
+    {% else %}
+      <svg class="icon"><use href="#i-play"/></svg> Resume monitor
+    {% endif %}
+  </button>
+  <button class="btn primary" type="button" data-action="check-all">
+    <svg class="icon"><use href="#i-refresh"/></svg> Check all now
+  </button>
+{% endblock %}
+
+{% block content %}
+<section class="stat-grid" aria-label="Overview">
+  <article class="stat-card">
+    <div class="stat-icon"><svg class="icon"><use href="#i-channels"/></svg></div>
+    <div>
+      <p class="stat-label">Channels</p>
+      <p class="stat-value">{{ stats.channels_enabled }}<span class="stat-sub">/ {{ stats.channels_total }} enabled</span></p>
+    </div>
+  </article>
+  <article class="stat-card {{ 'accent-live' if stats.channels_live }}">
+    <div class="stat-icon"><svg class="icon"><use href="#i-broadcast"/></svg></div>
+    <div>
+      <p class="stat-label">Live now</p>
+      <p class="stat-value">{{ stats.channels_live }}</p>
+    </div>
+  </article>
+  <article class="stat-card {{ 'accent-recording' if stats.recordings_active }}">
+    <div class="stat-icon"><svg class="icon"><use href="#i-stop"/></svg></div>
+    <div>
+      <p class="stat-label">Recording now</p>
+      <p class="stat-value">{{ stats.recordings_active }}</p>
+    </div>
+  </article>
+  <article class="stat-card">
+    <div class="stat-icon"><svg class="icon"><use href="#i-recordings"/></svg></div>
+    <div>
+      <p class="stat-label">Recordings</p>
+      <p class="stat-value">{{ stats.recordings_total }}<span class="stat-sub">{{ stats.recordings_bytes_human }}</span></p>
+    </div>
+  </article>
+</section>
+
+<div class="dashboard-grid">
+  <section class="panel live-panel">
+    <header class="panel-head">
+      <div>
+        <h2>Live &amp; recording</h2>
+        <p class="panel-sub">
+          {% if monitor_state.state == 'running' %}
+            Next check in up to {{ monitor_state.check_interval }}s
+          {% elif monitor_state.state == 'paused' %}
+            Monitoring is paused — manual checks still work
+          {% else %}
+            Monitor is stopped
+          {% endif %}
+        </p>
+      </div>
+      <span class="count-pill">{{ live_channels|length }}</span>
+    </header>
+
+    {% if live_channels %}
+    <div class="live-grid">
+      {% for item in live_channels %}
+      {% set channel = item.channel %}
+      {% set active = item.active %}
+      <article class="live-card {{ 'is-recording' if active }}">
+        <div class="live-card-top">
+          <span class="platform-pill" style="--platform: {{ platform_color(channel.platform) }}">{{ platform_label(channel.platform) }}</span>
+          {% if active %}
+            <span class="badge badge-recording"><span class="pulse"></span>Recording</span>
+          {% else %}
+            <span class="badge badge-live"><span class="pulse"></span>Live</span>
+          {% endif %}
+        </div>
+        <h3 class="live-name">{{ channel.name or channel.identifier }}</h3>
+        <p class="live-title">{{ active.title if active else (channel.last_title or 'Live stream') }}</p>
+        <p class="live-meta">
+          {% if active %}
+            Started <time data-ts="{{ active.started_at }}">{{ active.started_at|reltime }}</time>
+            · {{ active.size_human }}
+          {% else %}
+            Detected <time data-ts="{{ channel.last_live_at }}">{{ channel.last_live_at|reltime }}</time>
+          {% endif %}
+        </p>
+        <div class="live-actions">
+          {% if active %}
+            <button class="btn danger sm" type="button" data-action="stop-recording" data-id="{{ active.recording_id }}">
+              <svg class="icon"><use href="#i-stop"/></svg> Stop recording
+            </button>
+            <button class="btn ghost sm" type="button" data-action="recording-log" data-id="{{ active.recording_id }}">
+              <svg class="icon"><use href="#i-file"/></svg> Log
+            </button>
+          {% else %}
+            <button class="btn ghost sm" type="button" data-action="check-channel" data-id="{{ channel.id }}">
+              <svg class="icon"><use href="#i-refresh"/></svg> Check now
+            </button>
+          {% endif %}
+          <a class="btn ghost sm" href="{{ channel.url }}" target="_blank" rel="noopener noreferrer">
+            <svg class="icon"><use href="#i-external"/></svg> Open
+          </a>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon"><svg class="icon"><use href="#i-broadcast"/></svg></div>
+      <h3>Nothing is live right now</h3>
+      <p>Stream Monitor checks every {{ monitor_state.check_interval }} seconds. Add channels to start monitoring.</p>
+      <a class="btn primary sm" href="/channels"><svg class="icon"><use href="#i-plus"/></svg> Add channels</a>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="panel versions-panel" data-versions>
+    <header class="panel-head">
+      <div>
+        <h2>Runtime versions</h2>
+        <p class="panel-sub">Detected from the configured binaries</p>
+      </div>
+      <button class="icon-btn" type="button" data-action="refresh-versions" aria-label="Refresh versions" title="Refresh versions">
+        <svg class="icon"><use href="#i-refresh"/></svg>
+      </button>
+    </header>
+    <div class="tool-list">
+      {% for key, label in [('ytdlp','yt-dlp'), ('deno','Deno'), ('ffmpeg','FFmpeg'), ('ffprobe','FFprobe'), ('curl_cffi','curl-cffi'), ('ytdlp_ejs','yt-dlp EJS')] %}
+      <div class="tool-row" data-version-key="{{ key }}">
+        <span class="tool-dot"></span>
+        <span class="tool-name">{{ label }}</span>
+        <span class="tool-value">Checking…</span>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="hint">Change binary paths on the <a href="/settings#tools">Settings</a> page.</p>
+  </section>
+</div>
+
+<section class="panel">
+  <header class="panel-head">
+    <div>
+      <h2>Recent recordings</h2>
+      <p class="panel-sub">Newest captures first</p>
+    </div>
+    <a class="btn ghost sm" href="/recordings">View all <svg class="icon"><use href="#i-external"/></svg></a>
+  </header>
+  {% if recent_recordings %}
+  <div class="table-wrap">
+    <table class="data-table compact">
+      <thead>
+        <tr><th>Started</th><th>Platform</th><th>Channel</th><th>Title</th><th>Duration</th><th>Size</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for rec in recent_recordings %}
+        <tr>
+          <td class="nowrap"><time data-ts="{{ rec.started_at }}">{{ rec.started_at|reltime }}</time></td>
+          <td><span class="platform-pill" style="--platform: {{ platform_color(rec.platform) }}">{{ platform_label(rec.platform) }}</span></td>
+          <td>{{ rec.channel_name or '—' }}</td>
+          <td class="title-cell" title="{{ rec.title or '' }}">{{ rec.title or '—' }}</td>
+          <td class="nowrap">{{ rec.duration_seconds|human_duration }}</td>
+          <td class="nowrap">{{ rec.size_bytes|human_size }}</td>
+          <td><span class="badge badge-{{ rec.status }}">{{ rec.status|capitalize }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state small">
+    <p>No recordings yet. When a monitored channel goes live it will be recorded automatically.</p>
+  </div>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <div>
+      <h2>Recent activity</h2>
+      <p class="panel-sub">Channel checks, recordings and settings changes</p>
+    </div>
+    <a class="btn ghost sm" href="/logs">Full log <svg class="icon"><use href="#i-external"/></svg></a>
+  </header>
+  {% if events %}
+  <ul class="event-list">
+    {% for event in events %}
+    <li class="event event-{{ event.level }}">
+      <span class="event-dot"></span>
+      <div class="event-body">
+        <p>{{ event.message }}</p>
+        <time data-ts="{{ event.created_at }}">{{ event.created_at|reltime }}</time>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty-state small"><p>No activity yet.</p></div>
+  {% endif %}
+</section>
+{% endblock %}

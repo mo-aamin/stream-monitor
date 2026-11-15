@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Channels · {{ app_name }}{% endblock %}
+
+{% block actions %}
+  <label class="auto-refresh"><input type="checkbox" data-auto-refresh> Auto refresh</label>
+  <button class="btn primary" type="button" data-action="check-all">
+    <svg class="icon"><use href="#i-refresh"/></svg> Check all now
+  </button>
+{% endblock %}
+
+{% block content %}
+<section class="panel add-panel" id="add-channel">
+  <header class="panel-head">
+    <div>
+      <h2>Add a channel</h2>
+      <p class="panel-sub">YouTube, Twitch, Kick and Rumble are supported</p>
+    </div>
+  </header>
+
+  <form id="add-channel-form" class="add-form" autocomplete="off">
+    <div class="field">
+      <label for="platform">Platform</label>
+      <select id="platform" name="platform">
+        {% for key, meta in platforms.items() %}
+        <option value="{{ key }}" data-placeholder="{{ meta.placeholder }}" data-hint="{{ meta.hint }}">{{ meta.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field grow">
+      <label for="identifier">Channel</label>
+      <input id="identifier" name="identifier" required maxlength="500" spellcheck="false"
+             placeholder="{{ platforms.youtube.placeholder }}">
+      <p class="help" id="channel-hint">{{ platforms.youtube.hint }}</p>
+    </div>
+    <div class="field">
+      <label for="channel-name">Display name <span class="optional">optional</span></label>
+      <input id="channel-name" name="name" maxlength="100" placeholder="Overrides detected name">
+    </div>
+    <div class="field field-action">
+      <button class="btn primary" type="submit">
+        <svg class="icon"><use href="#i-plus"/></svg> Add channel
+      </button>
+    </div>
+  </form>
+
+  <details class="bulk-add">
+    <summary>Bulk add — one channel per line</summary>
+    <form id="bulk-add-form" class="bulk-form">
+      <div class="field">
+        <label for="bulk-platform">Platform</label>
+        <select id="bulk-platform" name="platform">
+          {% for key, meta in platforms.items() %}
+          <option value="{{ key }}">{{ meta.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field grow">
+        <label for="bulk-lines">Channels</label>
+        <textarea id="bulk-lines" name="lines" rows="5" spellcheck="false"
+                  placeholder="@channelone&#10;@channeltwo&#10;https://www.youtube.com/@channelthree"></textarea>
+        <p class="help">Duplicates are skipped. Invalid entries are reported.</p>
+      </div>
+      <div class="field field-action">
+        <button class="btn ghost" type="submit">Import channels</button>
+      </div>
+    </form>
+  </details>
+</section>
+
+<div class="toolbar">
+  <div class="filter-chips" role="group" aria-label="Filter by platform">
+    <button class="chip active" type="button" data-filter-platform="all">All <span>{{ channel_total }}</span></button>
+    {% for key, meta in platforms.items() %}
+    <button class="chip" type="button" data-filter-platform="{{ key }}">{{ meta.label }} <span>{{ counts[key] }}</span></button>
+    {% endfor %}
+  </div>
+  <div class="search-box">
+    <svg class="icon"><use href="#i-search"/></svg>
+    <input id="channel-search" type="search" placeholder="Search channels…" autocomplete="off">
+  </div>
+  <span class="toolbar-count" id="channel-visible-count">{{ channel_total }} channel{{ '' if channel_total == 1 else 's' }}</span>
+</div>
+
+<section class="panel table-panel">
+  {% if rows %}
+  <div class="table-wrap">
+    <table class="data-table channels-table fixed-table" id="channels-table">
+      <colgroup>
+        <col style="width: 9%">
+        <col style="width: 24%">
+        <col style="width: 13%">
+        <col style="width: 11%">
+        <col style="width: 29%">
+        <col style="width: 14%">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Platform</th>
+          <th>Channel</th>
+          <th>Status</th>
+          <th>Last check</th>
+          <th>Last title / message</th>
+          <th class="actions-col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in rows %}
+        {% set channel = item.channel %}
+        <tr class="{{ 'row-disabled' if not channel.enabled }}"
+            data-platform="{{ channel.platform }}"
+            data-search="{{ ((channel.name or '') ~ ' ' ~ channel.identifier ~ ' ' ~ channel.url)|lower }}">
+          <td><span class="platform-pill" style="--platform: {{ platform_color(channel.platform) }}">{{ platform_label(channel.platform) }}</span></td>
+          <td>
+            <div class="channel-cell">
+              <strong>{{ channel.name or channel.identifier }}</strong>
+              <span class="muted">{{ channel.identifier }}</span>
+            </div>
+          </td>
+          <td>
+            <div class="status-stack">
+              {% if item.status == 'recording' %}
+                <span class="badge badge-recording"><span class="pulse"></span>Recording</span>
+              {% elif item.status == 'live' %}
+                <span class="badge badge-live"><span class="pulse"></span>Live</span>
+              {% elif item.status == 'offline' %}
+                <span class="badge badge-offline">Offline</span>
+              {% elif item.status == 'error' %}
+                <span class="badge badge-error">Error</span>
+              {% else %}
+                <span class="badge badge-unknown">Unknown</span>
+              {% endif %}
+              {% if not channel.enabled %}<span class="badge badge-disabled">Disabled</span>{% endif %}
+            </div>
+          </td>
+          <td class="nowrap">
+            {% if channel.last_checked_at %}
+              <time data-ts="{{ channel.last_checked_at }}">{{ channel.last_checked_at|reltime }}</time>
+            {% else %}
+              <span class="muted">never</span>
+            {% endif %}
+          </td>
+          <td class="title-cell">
+            {% if item.status == 'error' and channel.last_error %}
+              <span class="error-text" title="{{ channel.last_error }}">{{ channel.last_error }}</span>
+            {% elif item.status == 'offline' and channel.last_error %}
+              <span class="muted" title="{{ channel.last_error }}">{{ channel.last_error }}</span>
+            {% else %}
+              <span title="{{ channel.last_title or '' }}">{{ channel.last_title or '—' }}</span>
+            {% endif %}
+          </td>
+          <td class="row-actions">
+            {% if item.active %}
+              <button class="icon-btn danger" type="button" data-action="stop-channel" data-id="{{ channel.id }}"
+                      title="Stop recording" aria-label="Stop recording">
+                <svg class="icon"><use href="#i-stop"/></svg>
+              </button>
+            {% else %}
+              <button class="icon-btn" type="button" data-action="check-channel" data-id="{{ channel.id }}"
+                      title="Check now" aria-label="Check now">
+                <svg class="icon"><use href="#i-refresh"/></svg>
+              </button>
+            {% endif %}
+            <a class="icon-btn" href="{{ channel.url }}" target="_blank" rel="noopener noreferrer"
+               title="Open channel" aria-label="Open channel">
+              <svg class="icon"><use href="#i-external"/></svg>
+            </a>
+            <button class="icon-btn" type="button" data-action="toggle-channel" data-id="{{ channel.id }}"
+                    title="{{ 'Disable' if channel.enabled else 'Enable' }} monitoring"
+                    aria-label="{{ 'Disable' if channel.enabled else 'Enable' }} monitoring">
+              <svg class="icon"><use href="#{{ 'i-pause' if channel.enabled else 'i-play' }}"/></svg>
+            </button>
+            <button class="icon-btn danger" type="button" data-action="delete-channel" data-id="{{ channel.id }}"
+                    data-name="{{ channel.name or channel.identifier }}" title="Remove channel" aria-label="Remove channel">
+              <svg class="icon"><use href="#i-trash"/></svg>
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="empty-state small hidden" id="channel-no-results">
+    <p>No channels match the current filter.</p>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon"><svg class="icon"><use href="#i-channels"/></svg></div>
+    <h3>No channels yet</h3>
+    <p>Add your first YouTube, Twitch, Kick or Rumble channel above.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
