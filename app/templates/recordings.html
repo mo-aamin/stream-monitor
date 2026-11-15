@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Recordings · {{ app_name }}{% endblock %}
+
+{% block actions %}
+  <label class="auto-refresh"><input type="checkbox" data-auto-refresh> Auto refresh</label>
+  <a class="btn ghost" href="/recordings">
+    <svg class="icon"><use href="#i-refresh"/></svg> Refresh
+  </a>
+{% endblock %}
+
+{% block content %}
+<section class="stat-grid" aria-label="Recording totals">
+  <article class="stat-card">
+    <div class="stat-icon"><svg class="icon"><use href="#i-recordings"/></svg></div>
+    <div><p class="stat-label">Total recordings</p><p class="stat-value">{{ stats.total }}</p></div>
+  </article>
+  <article class="stat-card">
+    <div class="stat-icon"><svg class="icon"><use href="#i-file"/></svg></div>
+    <div><p class="stat-label">Disk usage</p><p class="stat-value">{{ stats.total_bytes_human }}</p></div>
+  </article>
+  <article class="stat-card">
+    <div class="stat-icon"><svg class="icon"><use href="#i-plus"/></svg></div>
+    <div><p class="stat-label">Added today</p><p class="stat-value">{{ stats.today }}</p></div>
+  </article>
+  <article class="stat-card {{ 'accent-recording' if monitor_state.active_count }}">
+    <div class="stat-icon"><svg class="icon"><use href="#i-stop"/></svg></div>
+    <div><p class="stat-label">Active now</p><p class="stat-value">{{ monitor_state.active_count }}</p></div>
+  </article>
+</section>
+
+<div class="toolbar">
+  <div class="filter-chips" role="group" aria-label="Filter by status">
+    {% set tabs = [('', 'All'), ('recording', 'Recording'), ('completed', 'Completed'), ('failed', 'Failed'), ('stopped', 'Stopped'), ('interrupted', 'Interrupted')] %}
+    {% for value, label in tabs %}
+      <a class="chip {{ 'active' if status_filter == value }}" href="/recordings{% if value %}?status={{ value }}{% endif %}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  <div class="search-box">
+    <svg class="icon"><use href="#i-search"/></svg>
+    <input id="recording-search" type="search" placeholder="Search channel or title…" autocomplete="off">
+  </div>
+  <span class="toolbar-count" id="recording-visible-count">{{ recordings|length }} recording{{ '' if recordings|length == 1 else 's' }}</span>
+</div>
+
+<section class="panel table-panel">
+  {% if recordings %}
+  <div class="table-wrap">
+    <table class="data-table recordings-table fixed-table" id="recordings-table">
+      <colgroup>
+        <col style="width: 13%">
+        <col style="width: 8%">
+        <col style="width: 11%">
+        <col style="width: 26%">
+        <col style="width: 8%">
+        <col style="width: 8%">
+        <col style="width: 11%">
+        <col style="width: 15%">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Started</th>
+          <th>Platform</th>
+          <th>Channel</th>
+          <th>Title</th>
+          <th>Duration</th>
+          <th>Size</th>
+          <th>Status</th>
+          <th class="actions-col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in recordings %}
+        <tr data-search="{{ ((rec.channel_name or '') ~ ' ' ~ (rec.title or '') ~ ' ' ~ (rec.filename or ''))|lower }}">
+          <td class="nowrap">
+            <time data-ts="{{ rec.started_at }}">{{ rec.started_at|reltime }}</time>
+            <span class="cell-sub" title="{{ rec.started_at|localtime }}">{{ rec.started_at|localtime }}</span>
+          </td>
+          <td><span class="platform-pill" style="--platform: {{ platform_color(rec.platform) }}">{{ platform_label(rec.platform) }}</span></td>
+          <td>{{ rec.channel_name or '—' }}</td>
+          <td class="title-cell">
+            <span title="{{ rec.title or '' }}">{{ rec.title or '—' }}</span>
+            {% if rec.filename %}<span class="cell-sub" title="{{ rec.filepath or '' }}">{{ rec.filename }}</span>{% endif %}
+          </td>
+          <td class="nowrap">{{ rec.duration_seconds|human_duration }}</td>
+          <td class="nowrap">{{ rec.size_bytes|human_size }}</td>
+          <td>
+            <span class="badge badge-{{ rec.status }}">{{ rec.status|capitalize }}</span>
+            {% if rec.status == 'failed' and rec.error %}
+              <span class="cell-sub error-text" title="{{ rec.error }}">{{ rec.error }}</span>
+            {% endif %}
+          </td>
+          <td class="row-actions">
+            {% if rec.status == 'recording' %}
+              <button class="icon-btn danger" type="button" data-action="stop-recording" data-id="{{ rec.id }}"
+                      title="Stop recording" aria-label="Stop recording">
+                <svg class="icon"><use href="#i-stop"/></svg>
+              </button>
+            {% endif %}
+            {% if rec.log_path %}
+              <button class="icon-btn" type="button" data-action="recording-log" data-id="{{ rec.id }}"
+                      title="View yt-dlp log" aria-label="View log">
+                <svg class="icon"><use href="#i-file"/></svg>
+              </button>
+            {% endif %}
+            {% if rec.status != 'recording' %}
+              <button class="icon-btn" type="button" data-action="delete-recording" data-id="{{ rec.id }}" data-file="0"
+                      title="Remove entry (keep file)" aria-label="Remove entry">
+                <svg class="icon"><use href="#i-trash"/></svg>
+              </button>
+              {% if rec.filepath %}
+                <button class="icon-btn danger" type="button" data-action="delete-recording" data-id="{{ rec.id }}"
+                        data-file="1" data-name="{{ rec.filename or rec.title or rec.id }}"
+                        title="Delete entry and video file" aria-label="Delete entry and file">
+                  <svg class="icon"><use href="#i-trash"/></svg>
+                </button>
+              {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="empty-state small hidden" id="recording-no-results">
+    <p>No recordings match the current search.</p>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon"><svg class="icon"><use href="#i-recordings"/></svg></div>
+    <h3>No recordings{% if status_filter %} with this status{% endif %}</h3>
+    <p>Recordings appear here once a live channel has been captured. Video playback is intentionally not included.</p>
+    <a class="btn ghost sm" href="/channels">Manage channels</a>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
