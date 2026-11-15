@@ -6,10 +6,14 @@
 #   DOCKERHUB_TOKEN     Docker Hub access token with Read & Write scope
 #
 # Resulting image: <dockerhub-username>/stream-monitor
-#   push to main            -> :latest and :sha-<short>
-#   push tag v1.2.0         -> :1.2.0 and :sha-<short>
-#   push tag v1-Beta1       -> :1-Beta1 and :sha-<short>
+#   push to main            -> :latest and :sha-<short> (multi-arch)
+#   push to dev             -> :dev and :sha-<short> (amd64 only, for testing)
+#   push tag v1.2.0         -> :1.2.0 and :sha-<short> (multi-arch)
+#   push tag v1-Beta1       -> :1-Beta1 and :sha-<short> (multi-arch)
 #   pull request            -> build only (amd64), no push, no credentials
+#
+# The :dev tag is a moving preview built from the dev branch. It is never
+# tagged :latest; only the default branch (main) publishes :latest.
 #
 # The image is built for linux/amd64 (Ubuntu servers) and linux/arm64
 # (Apple Silicon / ARM hosts). The Dockerfile already handles both through
@@ -19,10 +23,10 @@ name: Build and publish Docker image
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     tags: ["v*"]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
 # One run per ref; a newer push cancels an older in-flight build.
@@ -116,6 +120,7 @@ jobs:
           images: ${{ steps.image.outputs.image }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
             type=match,pattern=v(.*),group=1
             type=sha,format=short
 
@@ -123,9 +128,10 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          # Pull requests are single-architecture to keep them fast; main and
-          # tags produce the full multi-arch image.
-          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          # Pull requests and dev pushes are single-architecture so testing
+          # feedback stays fast; main and tags produce the full multi-arch
+          # image. (arm64 is emulated through QEMU and dominates build time.)
+          platforms: ${{ (github.event_name == 'pull_request' || github.ref == 'refs/heads/dev') && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
