@@ -1,4 +1,4 @@
 """Stream Monitor web application."""
 
-__version__ = "1-Beta1"
+__version__ = "1.0"
 APP_NAME = "Stream Monitor"

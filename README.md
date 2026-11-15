@@ -214,7 +214,7 @@ Health endpoint: `GET /healthz` on port `8080` inside the container.
 | `latest` | `main` branch | `linux/amd64`, `linux/arm64` |
 | `dev` | `dev` branch — preview build | `linux/amd64` |
 | `sha-<short>` | Every build, immutable | Depends on source branch |
-| `1.2.0`, `1-Beta1`, … | Git release tags (`v1.2.0`, `v1-Beta1`) | `linux/amd64`, `linux/arm64` |
+| `1.0`, `1.2.0`, … | Git release tags (`v1.0`, `v1.2.0`) | `linux/amd64`, `linux/arm64` |
 
 Use `latest` for normal deployments. For reproducible installs, pin a version
 tag, a `sha-…` tag, or a digest instead of `latest`.
