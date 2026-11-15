@@ -33,23 +33,23 @@ A look at the main views. Click any image to open it full size.
 
 **Dashboard** — live channels, active recordings, recent captures and runtime versions.
 
-[![Dashboard showing live channels, active recordings and runtime versions](screenshots/screenshot1.png)](screenshots/screenshot1.png)
+<a href="screenshots/screenshot1.png"><img src="screenshots/screenshot1.png" alt="Dashboard showing live channels, active recordings and runtime versions" width="720"></a>
 
 **Channels** — add channels individually or in bulk, with per-platform status.
 
-[![Channels page with the add form and channel list](screenshots/screenshot2.png)](screenshots/screenshot2.png)
+<a href="screenshots/screenshot2.png"><img src="screenshots/screenshot2.png" alt="Channels page with the add form and channel list" width="720"></a>
 
 **Recordings** — recording history with status, duration, size, filters and actions.
 
-[![Recordings page with recording history and filters](screenshots/screenshot3.png)](screenshots/screenshot3.png)
+<a href="screenshots/screenshot3.png"><img src="screenshots/screenshot3.png" alt="Recordings page with recording history and filters" width="720"></a>
 
 **Activity & Logs** — channel checks, settings changes and the application log.
 
-[![Activity and application log page](screenshots/screenshot4.png)](screenshots/screenshot4.png)
+<a href="screenshots/screenshot4.png"><img src="screenshots/screenshot4.png" alt="Activity and application log page" width="720"></a>
 
 **Settings** — tool paths, platform access, monitoring interval and recording options.
 
-[![Settings page with tool paths, platform access and recording options](screenshots/screenshot5.png)](screenshots/screenshot5.png)
+<a href="screenshots/screenshot5.png"><img src="screenshots/screenshot5.png" alt="Settings page with tool paths, platform access and recording options" width="720"></a>
 
 ---
 
