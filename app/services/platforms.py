@@ -32,8 +32,8 @@ PLATFORMS: dict[str, dict[str, str]] = {
         "label": "Rumble",
         "short": "RM",
         "color": "#f5a623",
-        "placeholder": "channelname, c/channelname, or https://rumble.com/c/channelname",
-        "hint": "Accepts /c/ or /user/ channel URLs. A currently live video URL also works.",
+        "placeholder": "channelname, c/channelname, user/name, or a rumble.com URL",
+        "hint": "Accepts /c/ or /user/ channel URLs. A bare name is tried as /c/ first, then /user/. A currently live video URL also works.",
     },
 }
 
@@ -196,6 +196,20 @@ def normalize_channel(platform: str, raw: str) -> NormalizedChannel:
         return NormalizedChannel(platform, clean, clean)
     # Root-level profile/channel path.
     return NormalizedChannel(platform, f"c/{parts[0]}", f"https://rumble.com/c/{parts[0]}")
+
+
+def rumble_alternate_channel(identifier: str) -> NormalizedChannel | None:
+    """The same Rumble name in the other namespace (``c/X`` <-> ``user/X``).
+
+    Rumble keeps channels (``/c/``) and user profiles (``/user/``) separate, so a
+    bare name can only be resolved by trying both.
+    """
+    kind, _, name = (identifier or "").partition("/")
+    other = {"c": "user", "user": "c"}.get(kind.lower())
+    if not other or not name or "/" in name:
+        return None
+    alternate = f"{other}/{name}"
+    return NormalizedChannel("rumble", alternate, f"https://rumble.com/{alternate}")
 
 
 def is_direct_rumble_video(url: str) -> bool:

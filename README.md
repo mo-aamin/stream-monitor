@@ -247,4 +247,35 @@ tag, a `sha-…` tag, or a digest instead of `latest`.
 
 ---
 
+## Changelog
+
+### v1.1 — 2026-11-18
+
+- **YouTube recordings play everywhere.** YouTube serves VP9 video by
+  default, which QuickTime, Safari and many other players cannot open when it
+  is saved as MP4. With MP4 output, recordings now prefer H.264 video and AAC
+  audio. If a stream has no H.264 version, the best available format is still
+  recorded.
+- **Cleaner file names.** Recordings are now named
+  `date - platform - channel - title.mp4` on every platform. The video ID
+  (e.g. `[1ElaY9NmAVg]`) is gone, and so is the second date that yt-dlp
+  appended to live-stream titles. Installs still using the old default
+  filename template are updated automatically; custom templates are kept.
+- **Correct status at the end of a stream.** A recording that ends with a
+  harmless yt-dlp error (such as `Did not get any data blocks`) but still
+  produces a complete file is now marked **completed** instead of **failed**.
+  The message is noted in the recording log.
+- **Rumble user channels work.** Rumble keeps channels (`rumble.com/c/name`)
+  and user accounts (`rumble.com/user/name`) separate, and a bare name was
+  always treated as `/c/`. Accounts such as `BonginoReport` failed with
+  `HTTP 403` / `HTTP 410`. If one form is not found, the other is now tried
+  automatically and the working URL is saved on the channel. A name that
+  exists in neither form now shows a clear "channel not found" error.
+
+### v1.0
+
+- Initial release.
+
+---
+
 Built with FastAPI, SQLite, yt-dlp, FFmpeg and Deno.

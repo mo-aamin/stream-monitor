@@ -28,7 +28,7 @@ def cfg():
         "impersonate_twitch": True,
         "impersonate_kick": True,
         "impersonate_rumble": True,
-        "filename_template": "%(title).120B [%(id)s].%(ext)s",
+        "filename_template": "%(fulltitle).120B.%(ext)s",
         "merge_output_format": "mp4",
         "format_selector": "",
         "youtube_live_from_start": True,
@@ -61,8 +61,11 @@ def test_build_record_args(cfg):
     assert "--print" in args
     assert "after_move:%(filepath)s" in args
     assert args[-1] == "https://www.youtube.com/watch?v=abc"
+    # MP4 output prefers H.264/AAC so YouTube does not hand us VP9-in-MP4.
+    assert args[args.index("-S") + 1] == "vcodec:h264,acodec:aac"
+    assert "-f" not in args
 
-    rumble = build_record_args(cfg, "rumble", "https://rumble.com/embed/abc/", "/out/file.mp4")
+    rumble =build_record_args(cfg, "rumble", "https://rumble.com/embed/abc/", "/out/file.mp4")
     assert "--live-from-start" not in rumble
 
 
@@ -72,6 +75,23 @@ def test_build_record_args_extra_and_format(cfg):
     args = build_record_args(cfg, "twitch", "https://www.twitch.tv/xqc", "/out/file.mp4")
     assert "--hls-use-mpegts" in args
     assert args[args.index("-f") + 1] == "bv*+ba/b"
+    # A user format selector takes precedence over the MP4 compatibility sort.
+    assert "-S" not in args
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"merge_output_format": "mkv"},
+        {"merge_output_format": ""},
+        {"extra_ytdlp_args": "-S res,fps"},
+        {"extra_ytdlp_args": "--format-sort=res"},
+    ],
+)
+def test_build_record_args_skips_mp4_format_sort(cfg, overrides):
+    cfg.update(overrides)
+    args = build_record_args(cfg, "youtube", "https://www.youtube.com/watch?v=abc", "/out/x")
+    assert "vcodec:h264,acodec:aac" not in args
 
 
 def test_output_template_has_prefix_and_escapes_percent(cfg, tmp_path):
@@ -85,7 +105,7 @@ def test_output_template_has_prefix_and_escapes_percent(cfg, tmp_path):
     assert "2026-01-02_03-04-05" in template
     assert "Kick" in template
     assert "100%% Legends" in template
-    assert template.endswith("%(title).120B [%(id)s].%(ext)s")
+    assert template.endswith("%(fulltitle).120B.%(ext)s")
 
 
 def test_parse_metadata_live_and_offline():
@@ -100,6 +120,14 @@ def test_parse_metadata_live_and_offline():
         '{"id":"abc","title":"VOD","live_status":"not_live","channel":"Chan"}'
     )
     assert offline["is_live"] is False
+
+
+def test_parse_metadata_prefers_fulltitle_without_live_date():
+    live = parse_metadata(
+        '{"id":"abc","title":"Market Open 2026-11-18 08:25","fulltitle":"Market Open",'
+        '"channel":"Chan","is_live":true}'
+    )
+    assert live["title"] == "Market Open"
 
 
 def test_parse_metadata_playlist():

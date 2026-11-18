@@ -71,3 +71,21 @@ def test_boolean_coercion(ctx):
     typed = ctx.settings.typed()
     assert typed["monitor_enabled"] is True
     assert typed["impersonate_twitch"] is False
+
+
+def test_filename_template_default_has_no_id_or_live_date(ctx):
+    template = ctx.settings.typed()["filename_template"]
+    assert template == "%(fulltitle).120B.%(ext)s"
+    assert "%(id)s" not in template
+
+
+def test_legacy_filename_template_is_migrated(ctx):
+    ctx.db.save_settings({"filename_template": "%(title).120B [%(id)s].%(ext)s"})
+    fresh = SettingsService(ctx.db, ctx.config)
+    assert fresh.typed()["filename_template"] == "%(fulltitle).120B.%(ext)s"
+
+
+def test_custom_filename_template_is_kept(ctx):
+    ctx.settings.update({"filename_template": "%(title)s [custom].%(ext)s"})
+    fresh = SettingsService(ctx.db, ctx.config)
+    assert fresh.typed()["filename_template"] == "%(title)s [custom].%(ext)s"

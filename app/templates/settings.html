@@ -186,7 +186,7 @@
       <div class="field">
         <label for="filename-template">Filename template</label>
         <input name="filename_template" id="filename-template" value="{{ settings.filename_template }}" spellcheck="false" required>
-        <p class="help">A <code>date - platform - channel - </code> prefix is added automatically. Must contain <code>%(ext)s</code>.</p>
+        <p class="help">Files are named <code>date - platform - channel - title</code>; the prefix is added automatically. Use <code>%(fulltitle)s</code> (not <code>%(title)s</code>, which adds a second date to live streams). Must contain <code>%(ext)s</code>.</p>
       </div>
 
       <div class="form-grid two">
@@ -201,7 +201,7 @@
         <div class="field">
           <label for="format-selector">Format selector <span class="optional">optional</span></label>
           <input name="format_selector" id="format-selector" value="{{ settings.format_selector }}" spellcheck="false" placeholder="bv*+ba/b">
-          <p class="help">Leave empty to let yt-dlp choose the best live format.</p>
+          <p class="help">Leave empty to let yt-dlp choose the best live format. With MP4 output, H.264/AAC is preferred so files play in QuickTime and browsers.</p>
         </div>
       </div>
 

@@ -22,8 +22,10 @@ from ..database import Database
 from ..utils import human_size, mask_credentials, utcnow, utcnow_iso
 from .platforms import (
     extract_rumble_embed_url,
+    NormalizedChannel,
     is_direct_rumble_video,
     platform_label,
+    rumble_alternate_channel,
     rumble_live_page_url,
 )
 from .settings import SettingsService
@@ -51,8 +53,20 @@ _CHROME_UA = (
 _MEDIA_SUFFIXES = (
     ".mp4", ".mkv", ".webm", ".flv", ".ts", ".m4a", ".mp3", ".opus", ".ogg", ".wav", ".part"
 )
+# Rumble answers 404 or 410 for a /c/ or /user/ name that does not exist.
+_RUMBLE_NOT_FOUND = frozenset({404, 410})
 # Fragment / per-format files created while a download is in progress.
 _INTERMEDIATE_RE = re.compile(r"\.f\d+\.|-Frag\d+\.")
+
+
+def _is_complete_output(filepath: str | None, size: int | None) -> bool:
+    """A finished media file: exists, non-empty, not a partial or per-format file."""
+    if not filepath or not size or size <= 0:
+        return False
+    name = os.path.basename(filepath)
+    if name.endswith((".part", ".ytdl")) or _INTERMEDIATE_RE.search(name):
+        return False
+    return os.path.isfile(filepath)
 
 
 def find_output_by_prefix(directory: str, prefix: str) -> str | None:
@@ -454,7 +468,15 @@ class Monitor:
             page_url = rumble_live_page_url(check_url)
             if not page_url:
                 return CheckResult(status="offline", message="No usable Rumble URL.")
-            html, error = await self._fetch_rumble_page(page_url, cfg)
+            html, error, status = await self._fetch_rumble_page(page_url, cfg)
+            if error and status in _RUMBLE_NOT_FOUND:
+                alternate = rumble_alternate_channel(channel["identifier"])
+                alt_page = rumble_live_page_url(alternate.url) if alternate else None
+                if alternate and alt_page:
+                    alt_html, alt_error, _ = await self._fetch_rumble_page(alt_page, cfg)
+                    if not alt_error:
+                        self._switch_rumble_channel(channel, alternate)
+                        html, error = alt_html, None
             if error:
                 return CheckResult(status="error", message=error)
             embed_url = extract_rumble_embed_url(html or "")
@@ -554,10 +576,37 @@ class Monitor:
             message=detail or f"yt-dlp exited with code {process.returncode}.",
         )
 
+    def _switch_rumble_channel(
+        self, channel: dict[str, Any], alternate: NormalizedChannel
+    ) -> None:
+        """Persist the working /c/ or /user/ form of a Rumble channel."""
+        old_identifier = channel["identifier"]
+        try:
+            self._db.update_channel(
+                int(channel["id"]), identifier=alternate.identifier, url=alternate.url
+            )
+        except Exception:  # noqa: BLE001 - e.g. the other form is already a separate row
+            logger.warning(
+                "Rumble %s not found; %s works but could not be saved",
+                old_identifier,
+                alternate.identifier,
+                exc_info=True,
+            )
+            return
+        channel["identifier"] = alternate.identifier
+        channel["url"] = alternate.url
+        self._db.add_event(
+            "info",
+            "channel",
+            f"Rumble: {old_identifier} does not exist; switched to {alternate.identifier}",
+            int(channel["id"]),
+        )
+        logger.info("Rumble channel %s switched to %s", old_identifier, alternate.identifier)
+
     @staticmethod
     def _rumble_error(status: int, html: str) -> str | None:
-        if status == 404:
-            return "Rumble channel not found (HTTP 404). Check the channel name."
+        if status in _RUMBLE_NOT_FOUND:
+            return f"Rumble channel not found (HTTP {status}). Check the channel name."
         if status >= 400:
             return f"Rumble returned HTTP {status}."
         if not html or "<title>404" in html.lower():
@@ -583,7 +632,8 @@ class Monitor:
 
     async def _fetch_rumble_page(
         self, url: str, cfg: dict[str, Any]
-    ) -> tuple[str | None, str | None]:
+    ) -> tuple[str | None, str | None, int | None]:
+        """Return ``(html, error, http_status)`` for a Rumble page."""
         browser_error: str | None = None
         try:
             status, html = await asyncio.wait_for(
@@ -592,7 +642,11 @@ class Monitor:
             )
             error = self._rumble_error(status, html)
             if error is None:
-                return html, None
+                return html, None, status
+            if status in _RUMBLE_NOT_FOUND:
+                # A definite "does not exist"; the plain-HTTP fallback would only
+                # be blocked (403) and hide the real reason.
+                return None, error, status
             browser_error = error
         except Exception as exc:  # noqa: BLE001 - fall back to httpx below
             browser_error = f"browser fetch failed: {exc}"
@@ -615,11 +669,12 @@ class Monitor:
             ) as client:
                 response = await client.get(url)
         except httpx.HTTPError as exc:
-            return None, f"{browser_error}; fallback fetch failed: {exc}"
+            return None, f"{browser_error}; fallback fetch failed: {exc}", None
         error = self._rumble_error(response.status_code, response.text)
         if error:
-            return None, f"{error} ({browser_error})" if browser_error else error
-        return response.text, None
+            message = f"{error} ({browser_error})" if browser_error else error
+            return None, message, response.status_code
+        return response.text, None, response.status_code
 
     def _apply_result(self, channel: dict[str, Any], result: CheckResult) -> None:
         channel_id = int(channel["id"])
@@ -878,6 +933,20 @@ class Monitor:
             status = "stopped"
         elif exit_code == 0 and not read_error:
             status = "completed"
+        elif not read_error and _is_complete_output(filepath, size):
+            # yt-dlp often exits non-zero at the end of a live stream (for
+            # example "Did not get any data blocks") after it has already
+            # merged a complete file. Treat that as a finished recording.
+            status = "completed"
+            warning = short_error("\n".join(active.output_tail))
+            if active.log_handle:
+                try:
+                    active.log_handle.write(
+                        f"\n# Note: yt-dlp exited with code {exit_code} but produced a "
+                        f"complete file{': ' + warning if warning else ''}\n"
+                    )
+                except OSError:
+                    pass
         else:
             status = "failed"
 
