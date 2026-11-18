@@ -7,6 +7,7 @@ from app.services.platforms import (
     extract_rumble_embed_url,
     is_direct_rumble_video,
     normalize_channel,
+    rumble_alternate_channel,
     rumble_live_page_url,
 )
 
@@ -110,3 +111,12 @@ def test_extract_rumble_embed_url():
     assert extract_rumble_embed_url(html) == "https://rumble.com/embed/v7g4n0q/"
     assert extract_rumble_embed_url("<html>nothing</html>") is None
     assert extract_rumble_embed_url('"embedUrl":"https://evil.test/embed/abc/"') is None
+
+
+def test_rumble_alternate_channel():
+    user = rumble_alternate_channel("c/BonginoReport")
+    assert user.identifier == "user/BonginoReport"
+    assert user.url == "https://rumble.com/user/BonginoReport"
+    assert rumble_alternate_channel("user/Bongino").identifier == "c/Bongino"
+    assert rumble_alternate_channel("https://rumble.com/v6m1ds9-x.html") is None
+    assert rumble_alternate_channel("c/") is None

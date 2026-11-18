@@ -265,6 +265,12 @@ tag, a `sha-…` tag, or a digest instead of `latest`.
   harmless yt-dlp error (such as `Did not get any data blocks`) but still
   produces a complete file is now marked **completed** instead of **failed**.
   The message is noted in the recording log.
+- **Rumble user channels work.** Rumble keeps channels (`rumble.com/c/name`)
+  and user accounts (`rumble.com/user/name`) separate, and a bare name was
+  always treated as `/c/`. Accounts such as `BonginoReport` failed with
+  `HTTP 403` / `HTTP 410`. If one form is not found, the other is now tried
+  automatically and the working URL is saved on the channel. A name that
+  exists in neither form now shows a clear "channel not found" error.
 
 ### v1.0
 
