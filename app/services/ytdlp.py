@@ -47,6 +47,21 @@ _SIGNIN_HINT = re.compile(
 )
 
 
+MP4_COMPAT_FORMAT_SORT = "vcodec:h264,acodec:aac"
+
+
+def _has_format_sort(extra_args: str) -> bool:
+    """True when the user's extra yt-dlp args already set a format sort."""
+    try:
+        tokens = shlex.split(extra_args)
+    except ValueError:
+        return False
+    return any(
+        token in {"-S", "--format-sort"} or token.startswith("--format-sort=")
+        for token in tokens
+    )
+
+
 def build_common_args(cfg: dict[str, Any], platform: str) -> list[str]:
     args: list[str] = [
         cfg["ytdlp_path"],
@@ -140,8 +155,14 @@ def build_record_args(
     if merge_format:
         args.extend(["--merge-output-format", merge_format])
     format_selector = (cfg.get("format_selector") or "").strip()
+    extra = (cfg.get("extra_ytdlp_args") or "").strip()
     if format_selector:
         args.extend(["-f", format_selector])
+    elif merge_format == "mp4" and not _has_format_sort(extra):
+        # yt-dlp prefers VP9/AV1 on YouTube by default; VP9 inside MP4 does not
+        # play in QuickTime/Safari and many other players. Prefer H.264 + AAC.
+        # ``-S`` only ranks formats, so streams without H.264 still record.
+        args.extend(["-S", MP4_COMPAT_FORMAT_SORT])
     if cfg.get("write_info_json"):
         args.append("--write-info-json")
     if platform == "youtube" and cfg.get("youtube_live_from_start"):
@@ -149,7 +170,6 @@ def build_record_args(
     if platform == "rumble" and cfg.get("rumble_live_from_start"):
         args.append("--live-from-start")
 
-    extra = (cfg.get("extra_ytdlp_args") or "").strip()
     if extra:
         try:
             args.extend(shlex.split(extra))
@@ -186,7 +206,7 @@ def parse_metadata(payload: str) -> dict[str, Any]:
         "is_live": is_live,
         "live_status": live_status or None,
         "channel_name": str(channel_name),
-        "title": str(data.get("title") or "Untitled stream"),
+        "title": str(data.get("fulltitle") or data.get("title") or "Untitled stream"),
         "video_id": str(data.get("id") or ""),
         "webpage_url": str(data.get("webpage_url") or data.get("original_url") or ""),
         "extractor": str(data.get("extractor_key") or data.get("extractor") or ""),

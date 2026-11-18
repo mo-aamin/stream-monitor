@@ -22,6 +22,13 @@ class SettingSpec:
     choices: tuple[str, ...] | None = None
 
 
+# ``fulltitle`` is the stream title without the date yt-dlp appends to live
+# ``title`` values; the date/platform/channel prefix is added separately.
+DEFAULT_FILENAME_TEMPLATE = "%(fulltitle).120B.%(ext)s"
+# Earlier default (added the video ID and, for live streams, a second date).
+_LEGACY_FILENAME_TEMPLATES = frozenset({"%(title).120B [%(id)s].%(ext)s"})
+
+
 def build_defaults(config: AppConfig) -> dict[str, SettingSpec]:
     tools = config.default_tools
     return {
@@ -44,7 +51,7 @@ def build_defaults(config: AppConfig) -> dict[str, SettingSpec]:
         "impersonate_kick": SettingSpec("bool", "1"),
         "impersonate_rumble": SettingSpec("bool", "1"),
         # Recording
-        "filename_template": SettingSpec("str", "%(title).120B [%(id)s].%(ext)s"),
+        "filename_template": SettingSpec("str", DEFAULT_FILENAME_TEMPLATE),
         "merge_output_format": SettingSpec("str", "mp4", choices=("", "mp4", "mkv", "webm")),
         "format_selector": SettingSpec("str", ""),
         "youtube_live_from_start": SettingSpec("bool", "1"),
@@ -82,6 +89,8 @@ class SettingsService:
         missing = {
             key: spec.default for key, spec in self.specs.items() if key not in existing
         }
+        if existing.get("filename_template") in _LEGACY_FILENAME_TEMPLATES:
+            missing["filename_template"] = DEFAULT_FILENAME_TEMPLATE
         if missing:
             self._db.save_settings(missing)
         self._cache = None

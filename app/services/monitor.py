@@ -55,6 +55,16 @@ _MEDIA_SUFFIXES = (
 _INTERMEDIATE_RE = re.compile(r"\.f\d+\.|-Frag\d+\.")
 
 
+def _is_complete_output(filepath: str | None, size: int | None) -> bool:
+    """A finished media file: exists, non-empty, not a partial or per-format file."""
+    if not filepath or not size or size <= 0:
+        return False
+    name = os.path.basename(filepath)
+    if name.endswith((".part", ".ytdl")) or _INTERMEDIATE_RE.search(name):
+        return False
+    return os.path.isfile(filepath)
+
+
 def find_output_by_prefix(directory: str, prefix: str) -> str | None:
     """Find the newest finalized (or partial) file for one recording.
 
@@ -878,6 +888,20 @@ class Monitor:
             status = "stopped"
         elif exit_code == 0 and not read_error:
             status = "completed"
+        elif not read_error and _is_complete_output(filepath, size):
+            # yt-dlp often exits non-zero at the end of a live stream (for
+            # example "Did not get any data blocks") after it has already
+            # merged a complete file. Treat that as a finished recording.
+            status = "completed"
+            warning = short_error("\n".join(active.output_tail))
+            if active.log_handle:
+                try:
+                    active.log_handle.write(
+                        f"\n# Note: yt-dlp exited with code {exit_code} but produced a "
+                        f"complete file{': ' + warning if warning else ''}\n"
+                    )
+                except OSError:
+                    pass
         else:
             status = "failed"
 
