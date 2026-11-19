@@ -83,7 +83,18 @@ services:
     volumes:
       - /opt/stream-monitor/data:/data
       - /opt/stream-monitor/recordings:/recordings
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 ```
+
+The `logging` block caps Docker's own copy of the container output at about
+30 MB. Without it, Docker's default log driver grows forever. If you use
+`docker run` instead of Compose, pass
+`--log-opt max-size=10m --log-opt max-file=3`, or set the same defaults for
+every container in the host's `/etc/docker/daemon.json`.
 
 ### 3. Start it
 
@@ -150,6 +161,13 @@ way to confirm a new build.
 | --- | --- | --- |
 | `/opt/stream-monitor/data` | `/data` | SQLite database, application log, per-recording yt-dlp logs |
 | `/opt/stream-monitor/recordings` | `/recordings` | Recorded video files |
+
+**Log size is bounded.** The application log (`app.log`) rotates at 2 MB and
+keeps 3 older copies. Per-recording yt-dlp logs are capped at 10 MB each and
+are deleted after 30 days; both limits can be changed under
+**Settings → Logs** (set the retention to `0` to keep them forever). Deleting
+a recording entry also deletes its log. Video files are never removed
+automatically.
 
 **Backups:** stop the container before copying `data` (or use SQLite's online
 backup). The `recordings` folder can be copied at any time; an active file may
@@ -245,8 +263,8 @@ Health endpoint: `GET /healthz` on port `8080` inside the container.
 | Tag | Source | Architecture |
 | --- | --- | --- |
 | `latest` | `main` branch | `linux/amd64`, `linux/arm64` |
-| `dev` | `dev` branch — preview build | `linux/amd64` |
-| `sha-<short>` | Every build, immutable | Depends on source branch |
+| `dev` | `dev` branch — preview build | `linux/amd64`, `linux/arm64` |
+| `sha-<short>` | Every build, immutable | `linux/amd64`, `linux/arm64` |
 | `1.0`, `1.2.0`, … | Git release tags (`v1.0`, `v1.2.0`) | `linux/amd64`, `linux/arm64` |
 
 Use `latest` for normal deployments. For reproducible installs, pin a version
@@ -255,6 +273,20 @@ tag, a `sha-…` tag, or a digest instead of `latest`.
 ---
 
 ## Changelog
+
+### v1.2 — 2026-11-19
+
+- **Logs no longer grow without limit.** Recording logs older than 30 days
+  are deleted automatically, along with logs left behind by deleted
+  recordings. Each recording log also stops growing at 10 MB.
+- **New Logs section in Settings.** Change how long recording logs are kept
+  (`0` keeps them forever) and the maximum size of each log. Video files are
+  never deleted automatically.
+- **Smaller container log.** Successful `/healthz` checks are no longer
+  written to the access log, and the Compose file now caps Docker's log at
+  about 30 MB (10 MB × 3 files).
+- **Database upkeep.** The database is tidied once a day and compacted when a
+  lot of free space has built up.
 
 ### v1.1 — 2026-11-18
 

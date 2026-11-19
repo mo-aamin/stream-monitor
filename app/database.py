@@ -386,6 +386,40 @@ class Database:
             cursor = conn.execute("DELETE FROM recordings WHERE id = ?", (recording_id,))
             return cursor.rowcount > 0
 
+    def recording_ids(self) -> set[int]:
+        with self.connect() as conn:
+            rows = conn.execute("SELECT id FROM recordings").fetchall()
+        return {int(row["id"]) for row in rows}
+
+    def clear_log_paths(self, recording_ids: list[int]) -> int:
+        """Forget the log file of recordings whose log was pruned."""
+        if not recording_ids:
+            return 0
+        with self.connect() as conn:
+            cursor = conn.executemany(
+                "UPDATE recordings SET log_path = NULL WHERE id = ?",
+                [(recording_id,) for recording_id in recording_ids],
+            )
+            return cursor.rowcount
+
+    def compact(self) -> dict[str, int]:
+        """Checkpoint the WAL and reclaim free pages if many have built up."""
+        with self.connect() as conn:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            free_pages = int(conn.execute("PRAGMA freelist_count").fetchone()[0])
+            total_pages = int(conn.execute("PRAGMA page_count").fetchone()[0])
+        vacuumed = 0
+        # VACUUM rewrites the whole file, so only do it when it pays off.
+        if free_pages >= 1000 and free_pages * 4 >= total_pages:
+            conn = sqlite3.connect(str(self.path), timeout=30)
+            try:
+                conn.execute("PRAGMA busy_timeout = 30000")
+                conn.execute("VACUUM")
+                vacuumed = 1
+            finally:
+                conn.close()
+        return {"free_pages": free_pages, "total_pages": total_pages, "vacuumed": vacuumed}
+
     def recording_stats(self) -> dict[str, Any]:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         with self.connect() as conn:

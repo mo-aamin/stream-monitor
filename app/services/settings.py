@@ -58,6 +58,9 @@ def build_defaults(config: AppConfig) -> dict[str, SettingSpec]:
         "rumble_live_from_start": SettingSpec("bool", "0"),
         "write_info_json": SettingSpec("bool", "0"),
         "extra_ytdlp_args": SettingSpec("str", ""),
+        # Logs
+        "recording_log_retention_days": SettingSpec("int", "30", 0, 3650),
+        "recording_log_max_mb": SettingSpec("int", "10", 1, 500),
     }
 
 
