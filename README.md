@@ -1,7 +1,7 @@
 # Stream Monitor
 
-[![Docker Hub](https://img.shields.io/badge/Docker_Hub-moamin1%2Fstream--monitor-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/moamin1/stream-monitor)
-[![Platforms](https://img.shields.io/badge/platforms-linux%2Famd64%20%7C%20linux%2Farm64-informational)](https://hub.docker.com/r/moamin1/stream-monitor/tags)
+[![GHCR](https://img.shields.io/badge/ghcr.io-mo--aamin%2Fstream--monitor-2496ED?logo=github&logoColor=white)](https://github.com/mo-aamin/stream-monitor/pkgs/container/stream-monitor)
+[![Platforms](https://img.shields.io/badge/platforms-linux%2Famd64%20%7C%20linux%2Farm64-informational)](https://github.com/mo-aamin/stream-monitor/pkgs/container/stream-monitor)
 
 **Self-hosted live-stream recorder for YouTube, Twitch, Kick and Rumble.**
 
@@ -73,7 +73,7 @@ Save this as `/opt/stream-monitor/docker-compose.yml`:
 ```yaml
 services:
   stream-monitor:
-    image: moamin1/stream-monitor:latest
+    image: ghcr.io/mo-aamin/stream-monitor:latest
     container_name: stream-monitor
     restart: unless-stopped
     environment:
@@ -106,7 +106,8 @@ name, `@handle`, or URL. The first live check runs immediately.
 
 ## Updating the image
 
-New images are published to Docker Hub. To pick up the latest one:
+New images are published to GitHub Container Registry
+(`ghcr.io/mo-aamin/stream-monitor`). To pick up the latest one:
 
 ```bash
 cd /opt/stream-monitor
@@ -123,6 +124,12 @@ are bind mounts, so they are untouched.
 >
 > Recreating the container stops it. If a recording is in progress, allow the
 > shutdown grace period to finish muxing — or update when nothing is recording.
+
+> **Moving from Docker Hub?** Images are no longer published to
+> `moamin1/stream-monitor`. Change the `image:` line in your
+> `docker-compose.yml` to `ghcr.io/mo-aamin/stream-monitor:latest`, then run
+> the `pull` and `up -d` commands above. Your `data` and `recordings` folders
+> are unaffected.
 
 Verify what is running:
 

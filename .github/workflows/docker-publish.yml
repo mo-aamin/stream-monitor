@@ -1,11 +1,11 @@
-# Build the Stream Monitor image and publish it to Docker Hub.
+# Build the Stream Monitor image and publish it to GitHub Container Registry.
 #
-# Required repository secrets (Settings -> Secrets and variables -> Actions ->
-# Secrets tab, NOT the Variables tab):
-#   DOCKERHUB_USERNAME  Docker Hub account name (lowercase)
-#   DOCKERHUB_TOKEN     Docker Hub access token with Read & Write scope
+# No secrets are required: the job authenticates to ghcr.io with the built-in
+# GITHUB_TOKEN (granted packages: write below). After the first push, set the
+# package visibility to Public under the repository's Packages page so users
+# can pull without logging in.
 #
-# Resulting image: <dockerhub-username>/stream-monitor
+# Resulting image: ghcr.io/<repository-owner>/stream-monitor
 #   push to main            -> :latest and :sha-<short> (multi-arch)
 #   push to dev             -> :dev and :sha-<short> (amd64 only, for testing)
 #   push tag v1.2.0         -> :1.2.0 and :sha-<short> (multi-arch)
@@ -38,8 +38,9 @@ permissions:
   contents: read
 
 env:
-  # Docker Hub repository name (not the full image path).
-  DOCKERHUB_REPOSITORY: stream-monitor
+  REGISTRY: ghcr.io
+  # Image name under the repository owner (not the full image path).
+  IMAGE_NAME: stream-monitor
 
 jobs:
   test:
@@ -68,34 +69,20 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7
 
-      # Resolve the image name once, lowercase it (Docker requires lowercase
-      # repository names), and fail early with a readable message when the
-      # Docker Hub credentials are missing.
+      # Resolve the image name once and lowercase it (registries require
+      # lowercase repository names).
       - name: Resolve image name
         id: image
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || vars.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           set -eu
-          username="${DOCKERHUB_USERNAME:-}"
-          token="${DOCKERHUB_TOKEN:-}"
-
-          if [ -z "$username" ] || [ -z "$token" ]; then
-            if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-              echo "No Docker Hub credentials for this pull request; building without pushing."
-              username="local"
-            else
-              echo "::error::Docker Hub credentials are missing. Add repository secrets DOCKERHUB_USERNAME (your lowercase Docker Hub username) and DOCKERHUB_TOKEN (an access token with Read & Write scope). The token must be a Secret, not a Variable."
-              exit 1
-            fi
-          fi
-
-          image="$(printf '%s/%s' "$username" "$DOCKERHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          image="$(printf '%s/%s/%s' "$REGISTRY" "$GITHUB_REPOSITORY_OWNER" "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')"
           echo "image=$image" >> "$GITHUB_OUTPUT"
           echo "Image will be: $image"
 
@@ -106,12 +93,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Log in to Docker Hub
+      - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME || vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Derive image tags and labels
         id: meta

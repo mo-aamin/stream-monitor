@@ -38,7 +38,7 @@ cookies.txt
 *.rtf
 *.pdf
 
-# Public GitHub / Docker Hub landing page: intentionally publishable.
+# Public GitHub / GHCR landing page: intentionally publishable.
 # Anchored to the repo root so only ./README.md is re-included.
 !/README.md
 
