@@ -123,6 +123,9 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Skip the provenance attestation manifests, which GHCR lists as
+          # "unknown/unknown" platforms alongside the real images.
+          provenance: false
           # Optional build-time pins; set these as repository variables to
           # override the Dockerfile defaults.
           build-args: |
