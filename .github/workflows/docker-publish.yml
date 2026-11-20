@@ -7,7 +7,7 @@
 #
 # Resulting image: ghcr.io/<repository-owner>/stream-monitor
 #   push to main            -> :latest and :sha-<short> (multi-arch)
-#   push to dev             -> :dev and :sha-<short> (amd64 only, for testing)
+#   push to dev             -> :dev and :sha-<short> (multi-arch, preview)
 #   push tag v1.2.0         -> :1.2.0 and :sha-<short> (multi-arch)
 #   push tag v1.0           -> :1.0 and :sha-<short> (multi-arch)
 #   pull request            -> build only (amd64), no push, no credentials
@@ -116,10 +116,10 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          # Pull requests and dev pushes are single-architecture so testing
-          # feedback stays fast; main and tags produce the full multi-arch
+          # Pull requests are single-architecture so feedback stays fast (they
+          # are never pushed); dev, main and tags produce the full multi-arch
           # image. (arm64 is emulated through QEMU and dominates build time.)
-          platforms: ${{ (github.event_name == 'pull_request' || github.ref == 'refs/heads/dev') && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

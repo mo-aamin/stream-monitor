@@ -227,6 +227,29 @@
       </div>
     </section>
 
+    <section class="panel" id="logs">
+      <header class="panel-head">
+        <div>
+          <h2>Logs</h2>
+          <p class="panel-sub">Keep log files from filling the disk</p>
+        </div>
+      </header>
+
+      <div class="form-grid two">
+        <div class="field">
+          <label for="log-retention">Keep recording logs for (days)</label>
+          <input type="number" name="recording_log_retention_days" id="log-retention" value="{{ settings.recording_log_retention_days }}" min="0" max="3650" required>
+          <p class="help">0–3650. Older yt-dlp logs are deleted automatically (checked every 6 hours). 0 keeps them forever.</p>
+        </div>
+        <div class="field">
+          <label for="log-max-mb">Maximum size per recording log (MB)</label>
+          <input type="number" name="recording_log_max_mb" id="log-max-mb" value="{{ settings.recording_log_max_mb }}" min="1" max="500" required>
+          <p class="help">1–500. Output beyond this is not written to the log. Applies to new recordings.</p>
+        </div>
+      </div>
+      <p class="hint">The application log rotates automatically at 2 MB and keeps 3 older copies. Recording files are never deleted by this setting.</p>
+    </section>
+
     <section class="panel" id="about">
       <header class="panel-head"><div><h2>About this instance</h2><p class="panel-sub">Runtime information</p></div></header>
       <dl class="meta-list">

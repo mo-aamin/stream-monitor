@@ -89,3 +89,15 @@ def test_custom_filename_template_is_kept(ctx):
     ctx.settings.update({"filename_template": "%(title)s [custom].%(ext)s"})
     fresh = SettingsService(ctx.db, ctx.config)
     assert fresh.typed()["filename_template"] == "%(title)s [custom].%(ext)s"
+
+
+def test_log_settings_defaults_and_limits(ctx):
+    cfg = ctx.settings.typed()
+    assert cfg["recording_log_retention_days"] == 30
+    assert cfg["recording_log_max_mb"] == 10
+    ctx.settings.update({"recording_log_retention_days": 0, "recording_log_max_mb": 500})
+    assert ctx.settings.typed()["recording_log_retention_days"] == 0
+    with pytest.raises(ValueError, match="between"):
+        ctx.settings.update({"recording_log_max_mb": 0})
+    with pytest.raises(ValueError, match="between"):
+        ctx.settings.update({"recording_log_retention_days": -1})

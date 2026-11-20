@@ -32,3 +32,9 @@ services:
       - ./recordings:/recordings
     security_opt:
       - no-new-privileges:true
+    # Cap Docker's own copy of the container output (about 30 MB in total).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

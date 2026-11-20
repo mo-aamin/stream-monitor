@@ -169,3 +169,36 @@ def test_rumble_check_keeps_channel_when_both_forms_missing(ctx):
     assert result.status == "error"
     assert "not found" in result.message
     assert ctx.db.get_channel(channel["id"])["identifier"] == "c/NoSuchName"
+
+
+def test_recording_log_size_cap(ctx, tmp_path):
+    from app.services.monitor import ActiveRecording
+
+    log_path = tmp_path / "1.log"
+    handle = open(log_path, "a", encoding="utf-8")
+    active = ActiveRecording(
+        recording_id=1,
+        channel_id=1,
+        platform="youtube",
+        channel_name="Test",
+        title="Stream",
+        url="https://example.com",
+        log_path=log_path,
+        started_at="2026-01-01T00:00:00",
+        started_epoch=0.0,
+        started_monotonic=0.0,
+        output_dir=str(tmp_path),
+        file_prefix="x",
+        log_handle=handle,
+        log_limit_bytes=1000,
+    )
+    line = "y" * 99  # 100 bytes with the newline
+    for _ in range(50):
+        ctx.monitor._handle_output_line(active, line)
+    handle.close()
+
+    content = log_path.read_text()
+    assert content.count(line) == 10
+    assert content.count("# Log truncated") == 1
+    assert active.log_truncated is True
+    assert len(active.output_tail) == 50

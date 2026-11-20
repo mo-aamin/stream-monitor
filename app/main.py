@@ -18,12 +18,40 @@ from .config import AppConfig, load_config
 from .context import STATIC_DIR, build_context, render
 from .routes import api as api_routes
 from .routes import pages as page_routes
+from .services.maintenance import Maintenance
 
 logger = logging.getLogger("streammonitor")
 
 
+class HealthCheckAccessFilter(logging.Filter):
+    """Drop uvicorn access-log lines for successful /healthz requests.
+
+    Docker's HEALTHCHECK calls /healthz every 30 seconds, which would otherwise
+    add thousands of identical lines to the container log every day.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) >= 5:
+            path = str(args[2]).split("?", 1)[0]
+            try:
+                status = int(args[4])
+            except (TypeError, ValueError):
+                return True
+            if path == "/healthz" and status < 400:
+                return False
+        return True
+
+
+def install_access_log_filter() -> None:
+    access_logger = logging.getLogger("uvicorn.access")
+    if not any(isinstance(f, HealthCheckAccessFilter) for f in access_logger.filters):
+        access_logger.addFilter(HealthCheckAccessFilter())
+
+
 def configure_logging(config: AppConfig) -> None:
     config.ensure_directories()
+    install_access_log_filter()
     root = logging.getLogger("streammonitor")
     if getattr(root, "_streammonitor_configured", False):
         return
@@ -84,6 +112,13 @@ def create_app(config: AppConfig | None = None, *, start_monitor: bool | None = 
         should_start = app_config.monitor_autostart if start_monitor is None else start_monitor
         if should_start:
             ctx.monitor.start()
+        maintenance = Maintenance(
+            app_config, ctx.db, ctx.settings, ctx.monitor.active_recording_ids
+        )
+        # Housekeeping runs even when MONITOR_AUTOSTART is off; only an
+        # explicit start_monitor=False (used by tests) disables it.
+        if start_monitor is not False:
+            maintenance.start()
         logger.info(
             "%s v%s started (data=%s, recordings=%s)",
             APP_NAME,
@@ -94,6 +129,7 @@ def create_app(config: AppConfig | None = None, *, start_monitor: bool | None = 
         try:
             yield
         finally:
+            await maintenance.shutdown()
             await ctx.monitor.shutdown()
 
     app = FastAPI(

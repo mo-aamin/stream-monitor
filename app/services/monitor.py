@@ -152,6 +152,9 @@ class ActiveRecording:
     process: "Process | None" = None
     task: asyncio.Task | None = None
     log_handle: Any = None
+    log_bytes: int = 0
+    log_limit_bytes: int = 0
+    log_truncated: bool = False
     filepath: str | None = None
     filename: str | None = None
     stop_requested: bool = False
@@ -210,6 +213,9 @@ class Monitor:
         if not self._settings.typed()["monitor_enabled"]:
             return "paused"
         return "running"
+
+    def active_recording_ids(self) -> set[int]:
+        return set(self._active)
 
     def is_recording(self, channel_id: int) -> bool:
         return channel_id in self._active_by_channel
@@ -818,6 +824,7 @@ class Monitor:
             file_prefix=file_prefix,
             process=process,
             log_handle=log_handle,
+            log_limit_bytes=int(cfg["recording_log_max_mb"]) * 1024 * 1024,
         )
         self._active[recording_id] = active
         self._active_by_channel[channel_id] = recording_id
@@ -884,13 +891,28 @@ class Monitor:
             self._handle_output_line(active, line)
         return await process.wait()
 
+    @staticmethod
+    def _write_log_line(active: ActiveRecording, line: str) -> None:
+        """Append to the recording log, stopping once it reaches the size cap."""
+        if not active.log_handle or active.log_truncated:
+            return
+        text = line + "\n"
+        size = len(text.encode("utf-8", errors="replace"))
+        try:
+            if active.log_limit_bytes and active.log_bytes + size > active.log_limit_bytes:
+                active.log_handle.write(
+                    "# Log truncated: size limit reached; further output suppressed\n"
+                )
+                active.log_truncated = True
+                return
+            active.log_handle.write(text)
+            active.log_bytes += size
+        except OSError:
+            pass
+
     def _handle_output_line(self, active: ActiveRecording, line: str) -> None:
         active.output_tail.append(line)
-        if active.log_handle:
-            try:
-                active.log_handle.write(line + "\n")
-            except OSError:
-                pass
+        self._write_log_line(active, line)
         candidate = extract_output_path(line)
         if candidate and candidate != active.filepath:
             active.filepath = candidate
