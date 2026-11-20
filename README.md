@@ -274,6 +274,13 @@ tag, a `sha-…` tag, or a digest instead of `latest`.
 
 ## Changelog
 
+### v1.2.1 — 2026-11-20
+
+- **More reliable YouTube recordings.** YouTube streams are no longer
+  recorded with `--live-from-start` by default; recording now begins from
+  the live point. You can turn it back on under **Settings → YouTube: live
+  from start**.
+
 ### v1.2 — 2026-11-19
 
 - **Logs no longer grow without limit.** Recording logs older than 30 days

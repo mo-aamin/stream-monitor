@@ -54,7 +54,7 @@ def build_defaults(config: AppConfig) -> dict[str, SettingSpec]:
         "filename_template": SettingSpec("str", DEFAULT_FILENAME_TEMPLATE),
         "merge_output_format": SettingSpec("str", "mp4", choices=("", "mp4", "mkv", "webm")),
         "format_selector": SettingSpec("str", ""),
-        "youtube_live_from_start": SettingSpec("bool", "1"),
+        "youtube_live_from_start": SettingSpec("bool", "0"),
         "rumble_live_from_start": SettingSpec("bool", "0"),
         "write_info_json": SettingSpec("bool", "0"),
         "extra_ytdlp_args": SettingSpec("str", ""),
