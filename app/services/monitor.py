@@ -28,6 +28,7 @@ from .platforms import (
     rumble_alternate_channel,
     rumble_live_page_url,
 )
+from .remux import ensure_playable
 from .settings import SettingsService
 from .tools import ToolService
 from .ytdlp import (
@@ -55,6 +56,10 @@ _MEDIA_SUFFIXES = (
 )
 # Rumble answers 404 or 410 for a /c/ or /user/ name that does not exist.
 _RUMBLE_NOT_FOUND = frozenset({404, 410})
+# How long a stopped recording may take to flush and remux before it is killed.
+# Keep SHUTDOWN_STOP_TIMEOUT below docker-compose's stop_grace_period (120s).
+STOP_TIMEOUT = 120.0
+SHUTDOWN_STOP_TIMEOUT = 100.0
 # Fragment / per-format files created while a download is in progress.
 _INTERMEDIATE_RE = re.compile(r"\.f\d+\.|-Frag\d+\.")
 
@@ -941,6 +946,19 @@ class Monitor:
             final_path = filepath[:-5]
             if os.path.exists(final_path):
                 filepath = final_path
+        if filepath:
+            # Live HLS is recorded by ffmpeg as MPEG-TS. yt-dlp never remuxes
+            # YouTube's merged video+audio live download, so do it here.
+            try:
+                filepath, note = await ensure_playable(filepath, cfg)
+            except Exception:  # noqa: BLE001 - never lose the recording over this
+                logger.exception("Could not check/remux %s", filepath)
+                note = None
+            if note and active.log_handle:
+                try:
+                    active.log_handle.write(f"\n# {note}\n")
+                except OSError:
+                    pass
         filename = os.path.basename(filepath) if filepath else active.filename
         size = None
         if filepath:
@@ -1034,8 +1052,15 @@ class Monitor:
 
     # -------------------------------------------------------------- stop paths
     @staticmethod
-    def _signal(process: "Process", sig: int) -> None:
+    def _signal(process: "Process", sig: int, *, group: bool = True) -> None:
+        """Signal yt-dlp, or (``group=True``) yt-dlp and every child it started."""
         if process.returncode is not None:
+            return
+        if not group:
+            try:
+                process.send_signal(sig)
+            except (ProcessLookupError, OSError):
+                pass
             return
         try:
             os.killpg(os.getpgid(process.pid), sig)
@@ -1048,13 +1073,19 @@ class Monitor:
     def _kill(self, process: "Process") -> None:
         self._signal(process, signal.SIGKILL)
 
-    async def stop_recording(self, recording_id: int, timeout: float = 45.0) -> bool:
+    def _interrupt(self, process: "Process") -> None:
+        # Interrupt yt-dlp only. For live HLS it then asks its ffmpeg child to
+        # quit ("q"), so ffmpeg flushes the file and yt-dlp can run its own
+        # post-processing; _kill still takes down the whole group if needed.
+        self._signal(process, signal.SIGINT, group=False)
+
+    async def stop_recording(self, recording_id: int, timeout: float = STOP_TIMEOUT) -> bool:
         active = self._active.get(recording_id)
         if active is None:
             return False
         active.stop_requested = True
         if active.process is not None:
-            self._signal(active.process, signal.SIGINT)
+            self._interrupt(active.process)
         task = active.task
         if task:
             try:
@@ -1062,6 +1093,10 @@ class Monitor:
             except asyncio.TimeoutError:
                 if active.process is not None:
                     self._kill(active.process)
+                if active.finalized:
+                    # yt-dlp is gone and the file is being remuxed; let it finish.
+                    await asyncio.shield(task)
+                    return True
                 try:
                     await asyncio.wait_for(active.task, timeout=10)
                 except (asyncio.TimeoutError, asyncio.CancelledError):
@@ -1070,7 +1105,9 @@ class Monitor:
                     await self._finalize(active, None, "Recording did not stop cleanly")
         return True
 
-    async def stop_channel_recording(self, channel_id: int, timeout: float = 45.0) -> bool:
+    async def stop_channel_recording(
+        self, channel_id: int, timeout: float = STOP_TIMEOUT
+    ) -> bool:
         recording_id = self._active_by_channel.get(channel_id)
         if recording_id is None:
             return False
@@ -1084,12 +1121,13 @@ class Monitor:
         for active in active_list:
             active.stop_requested = True
             if active.process is not None:
-                self._signal(active.process, signal.SIGINT)
+                self._interrupt(active.process)
         tasks = [active.task for active in active_list if active.task is not None]
         if tasks:
             try:
                 await asyncio.wait_for(
-                    asyncio.gather(*tasks, return_exceptions=True), timeout=60
+                    asyncio.shield(asyncio.gather(*tasks, return_exceptions=True)),
+                    timeout=SHUTDOWN_STOP_TIMEOUT,
                 )
             except asyncio.TimeoutError:
                 logger.warning("Recordings did not stop in time; killing them")
@@ -1103,6 +1141,15 @@ class Monitor:
                             active.process.returncode if active.process else None,
                             "Recording did not stop cleanly",
                         )
+                # Tasks already finalizing (remuxing) get a short grace period
+                # instead of being cancelled halfway through.
+                finishing = [
+                    active.task
+                    for active in active_list
+                    if active.task and not active.task.done()
+                ]
+                if finishing:
+                    await asyncio.wait(finishing, timeout=15)
                 for active in active_list:
                     if active.task and not active.task.done():
                         active.task.cancel()
