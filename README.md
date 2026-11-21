@@ -274,6 +274,15 @@ tag, a `sha-…` tag, or a digest instead of `latest`.
 
 ## Changelog
 
+### v1.2.2 — 2026-11-20
+
+- **YouTube recordings play again.** Without "live from start", YouTube is
+  recorded by ffmpeg as MPEG-TS inside an `.mp4` file, and yt-dlp never
+  converts it, so QuickTime/Safari could not open it. The app now checks each
+  finished recording and converts any MPEG-TS or leftover `.part` file into a
+  playable MP4. Stopping a recording also lets yt-dlp shut down ffmpeg
+  cleanly instead of interrupting both at once.
+
 ### v1.2.1 — 2026-11-20
 
 - **More reliable YouTube recordings.** YouTube streams are no longer

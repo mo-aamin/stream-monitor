@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 
 from app.services.monitor import Monitor, find_output_by_prefix
 
@@ -202,3 +203,73 @@ def test_recording_log_size_cap(ctx, tmp_path):
     assert content.count("# Log truncated") == 1
     assert active.log_truncated is True
     assert len(active.output_tail) == 50
+
+
+def test_finalize_remuxes_leftover_part_file(ctx, tmp_path, monkeypatch):
+    import app.services.monitor as monitor_module
+
+    prefix = "2026-11-20_08-00-00 - YouTube - X - "
+    active, output_dir, log_path = _make_active(ctx, tmp_path, prefix)
+    part = output_dir / f"{prefix}Live.mp4.part"
+    part.write_bytes(b"ts" * 512)
+    active.stop_requested = True
+
+    async def fake_ensure_playable(filepath, cfg):
+        assert filepath == str(part)
+        target = filepath[:-5]
+        os.replace(filepath, target)
+        return target, "Remuxed mpegts recording to a playable MP4."
+
+    monkeypatch.setattr(monitor_module, "ensure_playable", fake_ensure_playable)
+    asyncio.run(ctx.monitor._finalize(active, 255, None))
+
+    recording = ctx.db.get_recording(active.recording_id)
+    assert recording["status"] == "stopped"
+    assert recording["filename"] == f"{prefix}Live.mp4"
+    assert recording["size_bytes"] == 1024
+    assert "Remuxed mpegts" in log_path.read_text(encoding="utf-8")
+
+
+def test_finalize_survives_remux_crash(ctx, tmp_path, monkeypatch):
+    import app.services.monitor as monitor_module
+
+    prefix = "2026-11-20_08-00-00 - YouTube - X - "
+    active, output_dir, _ = _make_active(ctx, tmp_path, prefix)
+    (output_dir / f"{prefix}Live.mp4").write_bytes(b"x" * 1024)
+
+    async def boom(filepath, cfg):
+        raise RuntimeError("ffmpeg exploded")
+
+    monkeypatch.setattr(monitor_module, "ensure_playable", boom)
+    asyncio.run(ctx.monitor._finalize(active, 0, None))
+
+    recording = ctx.db.get_recording(active.recording_id)
+    assert recording["status"] == "completed"
+    assert (output_dir / f"{prefix}Live.mp4").exists()
+
+
+def test_interrupt_signals_only_ytdlp(monkeypatch):
+    import signal
+
+    import app.services.monitor as monitor_module
+
+    sent = []
+
+    class FakeProcess:
+        pid = 4242
+        returncode = None
+
+        def send_signal(self, sig):
+            sent.append(("proc", sig))
+
+    def fake_killpg(pgid, sig):
+        sent.append(("group", sig))
+
+    monkeypatch.setattr(monitor_module.os, "killpg", fake_killpg)
+    monkeypatch.setattr(monitor_module.os, "getpgid", lambda pid: pid)
+    Monitor._interrupt(Monitor, FakeProcess())  # type: ignore[arg-type]
+    assert sent == [("proc", signal.SIGINT)]
+
+    sent.clear()
+    Monitor._kill(Monitor, FakeProcess())  # type: ignore[arg-type]
+    assert sent == [("group", signal.SIGKILL)]
