@@ -40,6 +40,7 @@ from .ytdlp import (
     filename_prefix,
     parse_metadata,
     short_error,
+    youtube_live_from_start_decision,
 )
 
 if TYPE_CHECKING:
@@ -130,6 +131,7 @@ class CheckResult:
     url: str | None = None
     message: str | None = None
     live_status: str | None = None
+    live_started_at: float | None = None  # Unix time the stream went live, if known
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -556,6 +558,7 @@ class Monitor:
                 video_id=metadata["video_id"],
                 url=metadata["webpage_url"] or check_url,
                 live_status=metadata.get("live_status"),
+                live_started_at=metadata.get("live_started_at"),
             )
 
         kind = classify_failure(stderr_text)
@@ -767,7 +770,12 @@ class Monitor:
             channel_name,
             started_local,
         )
-        command = build_record_args(cfg, platform, record_url, output_template)
+        command = build_record_args(
+            cfg, platform, record_url, output_template, live_started_at=result.live_started_at
+        )
+        lfs_note = None
+        if platform == "youtube":
+            _, lfs_note = youtube_live_from_start_decision(cfg, result.live_started_at)
 
         try:
             versions = await asyncio.to_thread(self._tools.all_versions)
@@ -802,7 +810,9 @@ class Monitor:
             log_handle.write(
                 f"# Recording {recording_id} — {channel_name} — {title}\n"
                 f"# Started: {started_at}\n"
-                f"# Command: {mask_credentials(' '.join(command))}\n\n"
+                f"# Command: {mask_credentials(' '.join(command))}\n"
+                + (f"# {lfs_note}\n" if lfs_note else "")
+                + "\n"
             )
             process = await asyncio.create_subprocess_exec(
                 *command,

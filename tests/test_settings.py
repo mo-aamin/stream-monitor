@@ -110,3 +110,11 @@ def test_stop_timeout_setting(ctx):
     for bad in (60, 20000):
         with pytest.raises(ValueError, match="between"):
             ctx.settings.update({"stop_timeout": bad})
+
+
+def test_live_from_start_max_age_setting(ctx):
+    assert ctx.settings.typed()["youtube_live_from_start_max_age"] == 120
+    ctx.settings.update({"youtube_live_from_start_max_age": 0})
+    assert ctx.settings.typed()["youtube_live_from_start_max_age"] == 0
+    with pytest.raises(ValueError, match="between"):
+        ctx.settings.update({"youtube_live_from_start_max_age": -1})

@@ -168,3 +168,49 @@ def test_short_error_prefers_error_line():
 )
 def test_extract_output_path(line, path):
     assert extract_output_path(line) == path
+
+
+def test_live_from_start_adds_shortest_merge(cfg):
+    args = build_record_args(cfg, "youtube", "https://www.youtube.com/watch?v=abc", "/out/x.mp4")
+    assert "--live-from-start" in args
+    assert args[args.index("--postprocessor-args") + 1] == "Merger+ffmpeg_o:-shortest"
+
+    off = build_record_args(
+        cfg | {"youtube_live_from_start": False}, "youtube", "https://www.youtube.com/watch?v=abc", "/out/x.mp4"
+    )
+    assert "--live-from-start" not in off
+    assert "--postprocessor-args" not in off
+
+
+def test_live_from_start_skipped_for_old_streams(cfg):
+    import time
+
+    from app.services.ytdlp import youtube_live_from_start_decision
+
+    cfg = cfg | {"youtube_live_from_start_max_age": 120}
+    now = time.time()
+    url = "https://www.youtube.com/watch?v=abc"
+
+    recent = build_record_args(cfg, "youtube", url, "/out/x.mp4", live_started_at=now - 30 * 60)
+    assert "--live-from-start" in recent
+
+    old = build_record_args(cfg, "youtube", url, "/out/x.mp4", live_started_at=now - 5 * 86400)
+    assert "--live-from-start" not in old
+    assert "--postprocessor-args" not in old
+
+    unknown = build_record_args(cfg, "youtube", url, "/out/x.mp4", live_started_at=None)
+    assert "--live-from-start" in unknown
+
+    use, note = youtube_live_from_start_decision(cfg, now - 3 * 3600, now=now)
+    assert use is False and "3 h 0 min" in note and "120 minute" in note
+
+    no_limit = cfg | {"youtube_live_from_start_max_age": 0}
+    assert youtube_live_from_start_decision(no_limit, now - 5 * 86400, now=now) == (True, None)
+
+
+def test_parse_metadata_live_started_at():
+    import json
+
+    data = {"is_live": True, "title": "T", "id": "x", "release_timestamp": 1763830000}
+    assert parse_metadata(json.dumps(data))["live_started_at"] == 1763830000.0
+    assert parse_metadata(json.dumps({"is_live": True, "id": "x"}))["live_started_at"] is None

@@ -56,6 +56,8 @@ def build_defaults(config: AppConfig) -> dict[str, SettingSpec]:
         "merge_output_format": SettingSpec("str", "mp4", choices=("", "mp4", "mkv", "webm")),
         "format_selector": SettingSpec("str", ""),
         "youtube_live_from_start": SettingSpec("bool", "0"),
+        # Minutes; skip --live-from-start for streams live longer than this (0 = no limit).
+        "youtube_live_from_start_max_age": SettingSpec("int", "120", 0, 7200),
         "rumble_live_from_start": SettingSpec("bool", "0"),
         "write_info_json": SettingSpec("bool", "0"),
         "extra_ytdlp_args": SettingSpec("str", ""),

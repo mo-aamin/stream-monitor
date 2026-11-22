@@ -226,6 +226,12 @@
       </div>
 
       <div class="field">
+        <label for="lfs-max-age">YouTube live from start: maximum stream age (minutes)</label>
+        <input type="number" name="youtube_live_from_start_max_age" id="lfs-max-age" value="{{ settings.youtube_live_from_start_max_age }}" min="0" max="7200" required>
+        <p class="help">0–7200, 0 = no limit. Streams that have been live longer than this are recorded from the live point instead, because downloading from the start of a long stream (up to 120 hours back) never catches up during a recording.</p>
+      </div>
+
+      <div class="field">
         <label for="extra-args">Extra yt-dlp arguments <span class="optional">optional</span></label>
         <textarea name="extra_ytdlp_args" id="extra-args" rows="2" spellcheck="false" placeholder="--hls-use-mpegts">{{ settings.extra_ytdlp_args }}</textarea>
         <p class="help">Shell-style splitting is applied. Added to recording commands only.</p>
