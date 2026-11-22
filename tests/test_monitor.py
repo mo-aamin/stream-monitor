@@ -273,3 +273,128 @@ def test_interrupt_signals_only_ytdlp(monkeypatch):
     sent.clear()
     Monitor._kill(Monitor, FakeProcess())  # type: ignore[arg-type]
     assert sent == [("group", signal.SIGKILL)]
+
+
+class _FakeYtdlp:
+    """Stands in for a yt-dlp process: exits some time after SIGINT or on SIGKILL."""
+
+    def __init__(self, exit_after_sigint: float | None):
+        import signal
+
+        self._signal = signal
+        self.pid = 4242
+        self.returncode = None
+        self.signals: list[int] = []
+        self._exit_after_sigint = exit_after_sigint
+        self._exited = asyncio.Event()
+
+    def _exit(self, code: int) -> None:
+        if self.returncode is None:
+            self.returncode = code
+            self._exited.set()
+
+    def send_signal(self, sig):
+        self.signals.append(sig)
+        if sig == self._signal.SIGINT and self._exit_after_sigint is not None:
+            asyncio.get_running_loop().call_later(self._exit_after_sigint, self._exit, 0)
+        elif sig == self._signal.SIGKILL:
+            self._exit(-9)
+
+    async def wait(self):
+        await self._exited.wait()
+        return self.returncode
+
+
+def _setup_stop(ctx, tmp_path, monkeypatch, process, remux_seconds):
+    import app.services.monitor as monitor_module
+
+    prefix = "2026-11-20_08-00-00 - Rumble - X - "
+    active, output_dir, _ = _make_active(ctx, tmp_path, prefix)
+    (output_dir / f"{prefix}Live.mp4").write_bytes(b"x" * 1024)
+    remux_done = []
+
+    async def slow_ensure_playable(filepath, cfg):
+        await asyncio.sleep(remux_seconds)
+        remux_done.append(filepath)
+        return filepath, None
+
+    def fake_killpg(pgid, sig):
+        process.send_signal(sig)
+
+    monkeypatch.setattr(monitor_module, "ensure_playable", slow_ensure_playable)
+    monkeypatch.setattr(monitor_module.os, "killpg", fake_killpg)
+    monkeypatch.setattr(monitor_module.os, "getpgid", lambda pid: pid)
+
+    monitor = ctx.monitor
+    active.process = process
+
+    async def consume():
+        code = await process.wait()
+        await monitor._finalize(active, code, None)
+
+    def register():
+        active.task = asyncio.create_task(consume(), name="recording-test")
+        monitor._active[active.recording_id] = active
+        monitor._active_by_channel[active.channel_id] = active.recording_id
+
+    return active, register, remux_done
+
+
+def test_stop_allows_long_post_processing(ctx, tmp_path, monkeypatch):
+    import signal
+
+    process = _FakeYtdlp(exit_after_sigint=0.3)
+    active, register, remux_done = _setup_stop(ctx, tmp_path, monkeypatch, process, 0.3)
+    ctx.settings.update({"stop_timeout": 120})
+
+    async def run():
+        register()
+        assert await ctx.monitor.stop_recording(active.recording_id) is True
+
+    asyncio.run(run())
+    assert process.signals == [signal.SIGINT]
+    assert remux_done
+    assert ctx.db.get_recording(active.recording_id)["status"] == "stopped"
+
+
+def test_stop_timeout_kill_does_not_cancel_running_remux(ctx, tmp_path, monkeypatch):
+    import signal
+
+    import app.services.monitor as monitor_module
+
+    monkeypatch.setattr(monitor_module, "KILL_SETTLE_TIMEOUT", 0.05)
+    process = _FakeYtdlp(exit_after_sigint=None)  # ignores SIGINT
+    active, register, remux_done = _setup_stop(ctx, tmp_path, monkeypatch, process, 0.4)
+
+    async def run():
+        register()
+        assert await ctx.monitor.stop_recording(active.recording_id, timeout=0.1) is True
+
+    asyncio.run(run())
+    assert process.signals == [signal.SIGINT, signal.SIGKILL]
+    assert remux_done, "the app remux must finish, not be cancelled"
+    recording = ctx.db.get_recording(active.recording_id)
+    assert recording["status"] == "stopped"
+    assert active.recording_id not in ctx.monitor._active
+
+
+def test_request_stop_returns_immediately_and_is_idempotent(ctx, tmp_path, monkeypatch):
+    import signal
+
+    process = _FakeYtdlp(exit_after_sigint=0.2)
+    active, register, remux_done = _setup_stop(ctx, tmp_path, monkeypatch, process, 0.1)
+
+    async def run():
+        register()
+        assert ctx.monitor.request_stop_channel(active.channel_id) is True
+        first = active.stop_task
+        assert ctx.monitor.request_stop(active.recording_id) is True
+        assert active.stop_task is first
+        assert not active.task.done()
+        await first
+
+    asyncio.run(run())
+    assert process.signals == [signal.SIGINT]
+    assert remux_done
+    assert ctx.db.get_recording(active.recording_id)["status"] == "stopped"
+    assert ctx.monitor.request_stop(active.recording_id) is False

@@ -17,6 +17,11 @@ from ..utils import human_size, tail_text
 
 router = APIRouter(prefix="/api")
 
+_STOPPING_MESSAGE = "Stopping — the recording will finish post-processing in the background."
+# Deleting a recording that is still active waits (blocking the request) for it
+# to stop; keep that bounded rather than using the long stop_timeout setting.
+_DELETE_STOP_TIMEOUT = 120.0
+
 
 def _ctx(request: Request):
     return request.app.state.ctx
@@ -185,10 +190,9 @@ async def check_channel(request: Request, channel_id: int):
 @router.post("/channels/{channel_id}/stop")
 async def stop_channel_recording(request: Request, channel_id: int):
     ctx = _ctx(request)
-    stopped = await ctx.monitor.stop_channel_recording(channel_id)
-    if not stopped:
+    if not ctx.monitor.request_stop_channel(channel_id):
         raise HTTPException(404, "This channel is not recording.")
-    return {"ok": True, "message": "Recording stopped."}
+    return {"ok": True, "message": _STOPPING_MESSAGE}
 
 
 # --------------------------------------------------------------------- monitor
@@ -315,10 +319,9 @@ async def recording_log(request: Request, recording_id: int):
 @router.post("/recordings/{recording_id}/stop")
 async def stop_recording(request: Request, recording_id: int):
     ctx = _ctx(request)
-    stopped = await ctx.monitor.stop_recording(recording_id)
-    if not stopped:
+    if not ctx.monitor.request_stop(recording_id):
         raise HTTPException(404, "Recording is not active.")
-    return {"ok": True, "message": "Recording stopped."}
+    return {"ok": True, "message": _STOPPING_MESSAGE}
 
 
 @router.delete("/recordings/{recording_id}")
@@ -328,7 +331,7 @@ async def delete_recording(request: Request, recording_id: int):
     if recording is None:
         raise HTTPException(404, "Recording not found.")
     if recording["status"] == "recording":
-        await ctx.monitor.stop_recording(recording_id)
+        await ctx.monitor.stop_recording(recording_id, timeout=_DELETE_STOP_TIMEOUT)
 
     delete_file = request.query_params.get("delete_file") in {"1", "true", "yes"}
     file_deleted = False

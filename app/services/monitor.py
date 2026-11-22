@@ -56,9 +56,12 @@ _MEDIA_SUFFIXES = (
 )
 # Rumble answers 404 or 410 for a /c/ or /user/ name that does not exist.
 _RUMBLE_NOT_FOUND = frozenset({404, 410})
-# How long a stopped recording may take to flush and remux before it is killed.
+# Fallback for how long a stopped recording may take to flush and post-process
+# before it is killed; the "stop_timeout" setting normally decides this.
 # Keep SHUTDOWN_STOP_TIMEOUT below docker-compose's stop_grace_period (120s).
-STOP_TIMEOUT = 120.0
+STOP_TIMEOUT = 3600.0
+# After a kill, how long to wait for the reader to notice and start finalizing.
+KILL_SETTLE_TIMEOUT = 10.0
 SHUTDOWN_STOP_TIMEOUT = 100.0
 # Fragment / per-format files created while a download is in progress.
 _INTERMEDIATE_RE = re.compile(r"\.f\d+\.|-Frag\d+\.")
@@ -164,6 +167,7 @@ class ActiveRecording:
     filename: str | None = None
     stop_requested: bool = False
     finalized: bool = False
+    stop_task: asyncio.Task | None = None
     output_tail: deque[str] = field(default_factory=lambda: deque(maxlen=200))
 
 
@@ -1079,39 +1083,94 @@ class Monitor:
         # post-processing; _kill still takes down the whole group if needed.
         self._signal(process, signal.SIGINT, group=False)
 
-    async def stop_recording(self, recording_id: int, timeout: float = STOP_TIMEOUT) -> bool:
+    def _stop_timeout(self) -> float:
+        try:
+            return float(self._settings.typed()["stop_timeout"])
+        except (KeyError, TypeError, ValueError):
+            return STOP_TIMEOUT
+
+    async def stop_recording(
+        self, recording_id: int, timeout: float | None = None
+    ) -> bool:
+        """Stop a recording and wait until it has been finalized.
+
+        yt-dlp is interrupted so it can flush the file and run its own
+        post-processing (which can take many minutes for large files on network
+        storage). Only if it is still running after ``timeout`` seconds (default:
+        the ``stop_timeout`` setting) is it killed. A file that is already being
+        checked/remuxed by the app is always allowed to finish.
+        """
         active = self._active.get(recording_id)
         if active is None:
             return False
-        active.stop_requested = True
-        if active.process is not None:
-            self._interrupt(active.process)
+        if timeout is None:
+            timeout = self._stop_timeout()
+        if not active.stop_requested:
+            active.stop_requested = True
+            if active.process is not None:
+                self._interrupt(active.process)
         task = active.task
-        if task:
+        if task is None:
+            return True
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            pass
+        if not active.finalized:
+            logger.warning(
+                "[%s] Recording did not finish post-processing within %gs; killing it",
+                recording_id,
+                timeout,
+            )
+            if active.process is not None:
+                self._kill(active.process)
             try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+                await asyncio.wait_for(asyncio.shield(task), timeout=KILL_SETTLE_TIMEOUT)
+                return True
             except asyncio.TimeoutError:
-                if active.process is not None:
-                    self._kill(active.process)
-                if active.finalized:
-                    # yt-dlp is gone and the file is being remuxed; let it finish.
-                    await asyncio.shield(task)
-                    return True
-                try:
-                    await asyncio.wait_for(active.task, timeout=10)
-                except (asyncio.TimeoutError, asyncio.CancelledError):
-                    if active.task:
-                        active.task.cancel()
-                    await self._finalize(active, None, "Recording did not stop cleanly")
+                pass
+        if active.finalized:
+            # yt-dlp is gone and the file is being checked/remuxed; let it finish.
+            await asyncio.shield(task)
+            return True
+        task.cancel()
+        await self._finalize(active, None, "Recording did not stop cleanly")
         return True
 
     async def stop_channel_recording(
-        self, channel_id: int, timeout: float = STOP_TIMEOUT
+        self, channel_id: int, timeout: float | None = None
     ) -> bool:
         recording_id = self._active_by_channel.get(channel_id)
         if recording_id is None:
             return False
         return await self.stop_recording(recording_id, timeout=timeout)
+
+    def request_stop(self, recording_id: int) -> bool:
+        """Start stopping a recording without waiting for it to be finalized."""
+        active = self._active.get(recording_id)
+        if active is None:
+            return False
+        if active.stop_task is None or active.stop_task.done():
+            active.stop_task = asyncio.create_task(
+                self._stop_in_background(recording_id), name=f"stop-{recording_id}"
+            )
+            self._active_tasks_add(active.stop_task)
+        return True
+
+    def request_stop_channel(self, channel_id: int) -> bool:
+        recording_id = self._active_by_channel.get(channel_id)
+        if recording_id is None:
+            return False
+        return self.request_stop(recording_id)
+
+    async def _stop_in_background(self, recording_id: int) -> None:
+        try:
+            await self.stop_recording(recording_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - background task, just log
+            logger.exception("[%s] Stopping the recording failed", recording_id)
 
     async def _stop_all_recordings(self, reason: str) -> None:
         active_list = list(self._active.values())

@@ -37,6 +37,7 @@ def build_defaults(config: AppConfig) -> dict[str, SettingSpec]:
         "check_interval": SettingSpec("int", "60", 15, 3600),
         "check_timeout": SettingSpec("int", "120", 20, 600),
         "retry_cooldown": SettingSpec("int", "300", 0, 86400),
+        "stop_timeout": SettingSpec("int", "3600", 120, 14400),
         # Tools
         "ytdlp_path": SettingSpec("str", tools["ytdlp_path"]),
         "deno_path": SettingSpec("str", tools["deno_path"]),

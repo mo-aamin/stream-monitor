@@ -274,6 +274,15 @@ tag, a `sha-…` tag, or a digest instead of `latest`.
 
 ## Changelog
 
+### v1.2.3 — 2026-11-22
+
+- **More time to finalize stopped recordings.** A recording stopped from the
+  web UI now gets up to 60 minutes (previously about 2 minutes) to finish
+  writing and post-processing (remuxing) before it is killed, so large
+  recordings on network storage finish properly. The Stop button now returns
+  right away while the recording finishes in the background. The limit can be
+  changed under **Settings → Stop / finalize timeout**.
+
 ### v1.2.2 — 2026-11-20
 
 - **YouTube recordings play again.** Without "live from start", YouTube is

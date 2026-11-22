@@ -171,6 +171,11 @@
         <input type="number" name="retry_cooldown" id="retry-cooldown" value="{{ settings.retry_cooldown }}" min="0" max="86400" required>
         <p class="help">Prevents a failing stream from retrying in a tight loop.</p>
       </div>
+      <div class="field">
+        <label for="stop-timeout">Stop / finalize timeout (seconds)</label>
+        <input type="number" name="stop_timeout" id="stop-timeout" value="{{ settings.stop_timeout }}" min="120" max="14400" required>
+        <p class="help">120–14400. How long a recording stopped from the web UI may take to finish writing and post-processing before it is killed. Large files on network storage need more time.</p>
+      </div>
     </section>
 
     <section class="panel" id="recording">

@@ -101,3 +101,12 @@ def test_log_settings_defaults_and_limits(ctx):
         ctx.settings.update({"recording_log_max_mb": 0})
     with pytest.raises(ValueError, match="between"):
         ctx.settings.update({"recording_log_retention_days": -1})
+
+
+def test_stop_timeout_setting(ctx):
+    assert ctx.settings.typed()["stop_timeout"] == 3600
+    ctx.settings.update({"stop_timeout": 7200})
+    assert ctx.settings.typed()["stop_timeout"] == 7200
+    for bad in (60, 20000):
+        with pytest.raises(ValueError, match="between"):
+            ctx.settings.update({"stop_timeout": bad})
