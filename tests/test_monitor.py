@@ -398,3 +398,85 @@ def test_request_stop_returns_immediately_and_is_idempotent(ctx, tmp_path, monke
     assert remux_done
     assert ctx.db.get_recording(active.recording_id)["status"] == "stopped"
     assert ctx.monitor.request_stop(active.recording_id) is False
+
+
+def test_live_check_keeps_cooldown_and_offline_clears_it(ctx):
+    import time
+
+    from app.services.monitor import CheckResult
+
+    monitor = ctx.monitor
+    channel = ctx.db.add_channel("youtube", "@cd", "https://www.youtube.com/@cd/live", "CD")
+    cid = channel["id"]
+    monitor._fail_cooldown[cid] = time.monotonic() + 300
+    monitor._quick_retries[cid] = 2
+
+    monitor._apply_result(channel, CheckResult(status="live", live=True, title="T"))
+    assert cid in monitor._fail_cooldown
+    assert monitor._quick_retries[cid] == 2
+
+    monitor._apply_result(ctx.db.get_channel(cid), CheckResult(status="offline"))
+    assert cid not in monitor._fail_cooldown
+    assert cid not in monitor._quick_retries
+
+
+def test_startup_failures_get_quick_retries_then_cooldown(ctx, monkeypatch):
+    import time
+
+    import app.services.monitor as monitor_module
+
+    monkeypatch.setattr(monitor_module, "QUICK_RETRY_DELAY", 0.05)
+    monitor = ctx.monitor
+    channel = ctx.db.add_channel("youtube", "@qr", "https://www.youtube.com/@qr/live", "QR")
+    cid = channel["id"]
+    scheduled = []
+    monkeypatch.setattr(monitor, "schedule_channel_check", lambda channel_id: scheduled.append(channel_id))
+
+    async def run():
+        for _ in range(2):
+            before = time.monotonic()
+            monitor._set_fail_cooldown(cid, ran_seconds=3)
+            assert monitor._fail_cooldown[cid] - before < 1
+        monitor._set_fail_cooldown(cid, ran_seconds=3)
+        remaining = monitor._fail_cooldown[cid] - time.monotonic()
+        assert 299 < remaining <= 300
+        await asyncio.sleep(1.3)
+
+    asyncio.run(run())
+    assert monitor._quick_retries[cid] == 2
+    assert scheduled == [cid, cid]
+    events = [e["message"] for e in ctx.db.list_events(limit=10)]
+    assert any("attempt 1 of 2" in m for m in events)
+    assert any("attempt 2 of 2" in m for m in events)
+
+
+def test_late_failure_uses_full_cooldown(ctx, monkeypatch):
+    import time
+
+    monitor = ctx.monitor
+    channel = ctx.db.add_channel("youtube", "@lf", "https://www.youtube.com/@lf/live", "LF")
+    cid = channel["id"]
+    monkeypatch.setattr(monitor, "schedule_channel_check", lambda channel_id: None)
+
+    async def run():
+        monitor._set_fail_cooldown(cid, ran_seconds=600)
+
+    asyncio.run(run())
+    assert cid not in monitor._quick_retries
+    assert monitor._fail_cooldown[cid] - time.monotonic() > 299
+
+
+def test_successful_recording_resets_retry_state(ctx, tmp_path):
+    import time
+
+    prefix = "2026-11-20_08-00-00 - YouTube - X - "
+    active, output_dir, _ = _make_active(ctx, tmp_path, prefix)
+    (output_dir / f"{prefix}Live.mp4").write_bytes(b"x" * 1024)
+    ctx.monitor._fail_cooldown[active.channel_id] = time.monotonic() + 300
+    ctx.monitor._quick_retries[active.channel_id] = 1
+
+    asyncio.run(ctx.monitor._finalize(active, 0, None))
+
+    assert ctx.db.get_recording(active.recording_id)["status"] == "completed"
+    assert active.channel_id not in ctx.monitor._fail_cooldown
+    assert active.channel_id not in ctx.monitor._quick_retries

@@ -290,6 +290,12 @@ tag, a `sha-…` tag, or a digest instead of `latest`.
   that have been live longer than **Settings → YouTube live from start:
   maximum stream age** (default 120 minutes) are recorded from the live point
   instead, since downloading from the start of a long stream never catches up.
+- **Faster recovery from failed starts; retry cooldown enforced.** YouTube
+  occasionally rejects a new stream link for a few seconds, which made a
+  recording fail right away with "The downloaded file is empty". A recording
+  that fails within its first minute is now retried after 15 seconds (up to
+  twice). After that, **Settings → Retry cooldown** is now respected even
+  while the channel stays live; previously every live check cleared it.
 
 ### v1.2.2 — 2026-11-20
 
