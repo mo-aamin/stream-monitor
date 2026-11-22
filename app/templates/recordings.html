@@ -90,7 +90,8 @@
               <span class="cell-sub error-text" title="{{ rec.error }}">{{ rec.error }}</span>
             {% endif %}
           </td>
-          <td class="row-actions">
+          <td class="actions-cell">
+            <div class="row-actions">
             {% if rec.status == 'recording' %}
               <button class="icon-btn danger" type="button" data-action="stop-recording" data-id="{{ rec.id }}"
                       title="Stop recording" aria-label="Stop recording">
@@ -116,6 +117,7 @@
                 </button>
               {% endif %}
             {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}

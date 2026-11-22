@@ -274,6 +274,23 @@ tag, a `sha-…` tag, or a digest instead of `latest`.
 
 ## Changelog
 
+### v1.2.3 — 2026-11-22
+
+- **More time to finalize stopped recordings.** A recording stopped from the
+  web UI now gets up to 60 minutes (previously about 2 minutes) to finish
+  writing and post-processing (remuxing) before it is killed, so large
+  recordings on network storage finish properly. The Stop button now returns
+  right away while the recording finishes in the background. The limit can be
+  changed under **Settings → Stop / finalize timeout**.
+- **YouTube "live from start" recordings keep video and audio in step.**
+  yt-dlp downloads video and audio separately from the start of the stream,
+  and stopping early left one track much longer than the other (for example
+  27 minutes of video with 75 minutes of audio). Recordings are now cut to the
+  shorter track, so the picture never freezes while audio plays on. Streams
+  that have been live longer than **Settings → YouTube live from start:
+  maximum stream age** (default 120 minutes) are recorded from the live point
+  instead, since downloading from the start of a long stream never catches up.
+
 ### v1.2.2 — 2026-11-20
 
 - **YouTube recordings play again.** Without "live from start", YouTube is

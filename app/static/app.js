@@ -346,8 +346,8 @@
       const id = button.dataset.id;
       setBusy(button, true);
       try {
-        await api(`/api/channels/${id}/stop`, { method: "POST" });
-        toast("Recording stopped.", "success");
+        const data = await api(`/api/channels/${id}/stop`, { method: "POST" });
+        toast((data && data.message) || "Stopping recording…", "success");
         reloadSoon(900);
       } finally {
         setBusy(button, false);
@@ -358,8 +358,8 @@
       const id = button.dataset.id;
       setBusy(button, true);
       try {
-        await api(`/api/recordings/${id}/stop`, { method: "POST" });
-        toast("Recording stopped.", "success");
+        const data = await api(`/api/recordings/${id}/stop`, { method: "POST" });
+        toast((data && data.message) || "Stopping recording…", "success");
         reloadSoon(900);
       } finally {
         setBusy(button, false);

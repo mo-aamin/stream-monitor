@@ -37,6 +37,7 @@ def build_defaults(config: AppConfig) -> dict[str, SettingSpec]:
         "check_interval": SettingSpec("int", "60", 15, 3600),
         "check_timeout": SettingSpec("int", "120", 20, 600),
         "retry_cooldown": SettingSpec("int", "300", 0, 86400),
+        "stop_timeout": SettingSpec("int", "3600", 120, 14400),
         # Tools
         "ytdlp_path": SettingSpec("str", tools["ytdlp_path"]),
         "deno_path": SettingSpec("str", tools["deno_path"]),
@@ -55,6 +56,8 @@ def build_defaults(config: AppConfig) -> dict[str, SettingSpec]:
         "merge_output_format": SettingSpec("str", "mp4", choices=("", "mp4", "mkv", "webm")),
         "format_selector": SettingSpec("str", ""),
         "youtube_live_from_start": SettingSpec("bool", "0"),
+        # Minutes; skip --live-from-start for streams live longer than this (0 = no limit).
+        "youtube_live_from_start_max_age": SettingSpec("int", "120", 0, 7200),
         "rumble_live_from_start": SettingSpec("bool", "0"),
         "write_info_json": SettingSpec("bool", "0"),
         "extra_ytdlp_args": SettingSpec("str", ""),

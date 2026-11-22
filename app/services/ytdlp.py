@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import shlex
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,11 @@ _SIGNIN_HINT = re.compile(
 
 
 MP4_COMPAT_FORMAT_SORT = "vcodec:h264,acodec:aac"
+# YouTube --live-from-start downloads video and audio as separate formats, each
+# on its own thread from the start of the stream. When the recording is stopped
+# before both caught up, one track is much longer than the other; make yt-dlp's
+# merge stop at the end of the shorter one.
+LIVE_FROM_START_MERGE_ARGS = ("--postprocessor-args", "Merger+ffmpeg_o:-shortest")
 
 
 def _has_format_sort(extra_args: str) -> bool:
@@ -126,11 +132,50 @@ def build_output_template(
     return escaped_prefix + filename_template
 
 
+def youtube_live_from_start_decision(
+    cfg: dict[str, Any],
+    live_started_at: float | None,
+    now: float | None = None,
+) -> tuple[bool, str | None]:
+    """Whether to pass ``--live-from-start`` for a YouTube recording.
+
+    Returns ``(use_it, note)``; ``note`` explains why it was skipped. A stream
+    that has been live for a long time would be downloaded from up to 120 hours
+    back, which never catches up with the live point during a recording.
+    """
+    if not cfg.get("youtube_live_from_start"):
+        return False, None
+    try:
+        max_age_minutes = int(cfg.get("youtube_live_from_start_max_age") or 0)
+    except (TypeError, ValueError):
+        max_age_minutes = 0
+    if max_age_minutes <= 0 or not live_started_at:
+        return True, None
+    current = time.time() if now is None else now
+    age_minutes = (current - float(live_started_at)) / 60
+    if age_minutes <= max_age_minutes:
+        return True, None
+    return False, (
+        f"Not using --live-from-start: the stream has been live for "
+        f"{_format_minutes(age_minutes)}, longer than the {max_age_minutes} minute limit. "
+        "Recording from the live point instead."
+    )
+
+
+def _format_minutes(minutes: float) -> str:
+    total = int(minutes)
+    hours, mins = divmod(total, 60)
+    if hours >= 48:
+        return f"{hours // 24} days"
+    return f"{hours} h {mins} min" if hours else f"{mins} min"
+
+
 def build_record_args(
     cfg: dict[str, Any],
     platform: str,
     url: str,
     output_template: str,
+    live_started_at: float | None = None,
 ) -> list[str]:
     args = build_common_args(cfg, platform)
     args.extend(
@@ -165,8 +210,11 @@ def build_record_args(
         args.extend(["-S", MP4_COMPAT_FORMAT_SORT])
     if cfg.get("write_info_json"):
         args.append("--write-info-json")
-    if platform == "youtube" and cfg.get("youtube_live_from_start"):
-        args.append("--live-from-start")
+    if platform == "youtube":
+        use_lfs, _ = youtube_live_from_start_decision(cfg, live_started_at)
+        if use_lfs:
+            args.append("--live-from-start")
+            args.extend(LIVE_FROM_START_MERGE_ARGS)
     if platform == "rumble" and cfg.get("rumble_live_from_start"):
         args.append("--live-from-start")
 
@@ -210,7 +258,17 @@ def parse_metadata(payload: str) -> dict[str, Any]:
         "video_id": str(data.get("id") or ""),
         "webpage_url": str(data.get("webpage_url") or data.get("original_url") or ""),
         "extractor": str(data.get("extractor_key") or data.get("extractor") or ""),
+        "live_started_at": _live_started_at(data),
     }
+
+
+def _live_started_at(data: dict[str, Any]) -> float | None:
+    """Unix time the live stream started (YouTube reports ``release_timestamp``)."""
+    for key in ("release_timestamp", "timestamp"):
+        value = data.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+            return float(value)
+    return None
 
 
 def classify_failure(stderr: str) -> str:

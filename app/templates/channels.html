@@ -149,7 +149,8 @@
               <span title="{{ channel.last_title or '' }}">{{ channel.last_title or '—' }}</span>
             {% endif %}
           </td>
-          <td class="row-actions">
+          <td class="actions-cell">
+            <div class="row-actions">
             {% if item.active %}
               <button class="icon-btn danger" type="button" data-action="stop-channel" data-id="{{ channel.id }}"
                       title="Stop recording" aria-label="Stop recording">
@@ -174,6 +175,7 @@
                     data-name="{{ channel.name or channel.identifier }}" title="Remove channel" aria-label="Remove channel">
               <svg class="icon"><use href="#i-trash"/></svg>
             </button>
+            </div>
           </td>
         </tr>
         {% endfor %}
