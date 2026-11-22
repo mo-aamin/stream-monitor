@@ -274,6 +274,14 @@ tag, a `sha-…` tag, or a digest instead of `latest`.
 
 ## Changelog
 
+### v1.3 — 2026-11-22
+
+- **New dark theme.** The web UI has a new flat dark look that replaces the
+  "Liquid Glass" theme: near-black backgrounds, simple grey panels, rounded
+  pill buttons and filter chips, and a red accent for live and recording
+  status. The blur and gradient effects are gone, which makes pages lighter
+  and easier to read.
+
 ### v1.2.3 — 2026-11-22
 
 - **More time to finalize stopped recordings.** A recording stopped from the
