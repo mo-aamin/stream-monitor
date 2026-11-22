@@ -63,6 +63,14 @@ _RUMBLE_NOT_FOUND = frozenset({404, 410})
 STOP_TIMEOUT = 3600.0
 # After a kill, how long to wait for the reader to notice and start finalizing.
 KILL_SETTLE_TIMEOUT = 10.0
+# A recording that fails within QUICK_RETRY_WINDOW seconds of starting is retried
+# after QUICK_RETRY_DELAY seconds, up to QUICK_RETRY_LIMIT times, before the
+# normal retry_cooldown applies. YouTube sometimes answers a freshly issued
+# stream URL with HTTP 403 for a few seconds; yt-dlp's live-from-start downloader
+# then gives up ("The downloaded file is empty"), but a fresh attempt works.
+QUICK_RETRY_WINDOW = 60.0
+QUICK_RETRY_DELAY = 15.0
+QUICK_RETRY_LIMIT = 2
 SHUTDOWN_STOP_TIMEOUT = 100.0
 # Fragment / per-format files created while a download is in progress.
 _INTERMEDIATE_RE = re.compile(r"\.f\d+\.|-Frag\d+\.")
@@ -201,6 +209,7 @@ class Monitor:
         self._active_by_channel: dict[int, int] = {}
         self._channel_locks: dict[int, asyncio.Lock] = {}
         self._fail_cooldown: dict[int, float] = {}
+        self._quick_retries: dict[int, int] = {}
 
         self._last_run_at: str | None = None
         self._next_run_at: str | None = None
@@ -704,7 +713,6 @@ class Monitor:
             self._db.set_channel_status(
                 channel_id, "live", title=result.title, live=True
             )
-            self._fail_cooldown.pop(channel_id, None)
             if previous != "live":
                 self._db.add_event(
                     "info",
@@ -713,6 +721,8 @@ class Monitor:
                     channel_id,
                 )
         elif result.status == "offline":
+            # The stream ended; the next one starts with a clean slate.
+            self._reset_fail_state(channel_id)
             self._db.set_channel_status(
                 channel_id, "offline", error=result.message
             )
@@ -876,9 +886,45 @@ class Monitor:
         self._db.set_channel_status(channel_id, "error", error=message)
         self._db.add_event("error", "recording", message, channel_id)
         logger.error("Recording %s failed to start: %s", recording_id, message)
+        self._set_fail_cooldown(channel_id, ran_seconds=0.0)
+
+    def _reset_fail_state(self, channel_id: int) -> None:
+        self._fail_cooldown.pop(channel_id, None)
+        self._quick_retries.pop(channel_id, None)
+
+    def _set_fail_cooldown(self, channel_id: int, ran_seconds: float) -> None:
+        """Hold off re-recording a channel after a failed recording.
+
+        A failure right after start-up is retried quickly a couple of times;
+        anything else waits for the ``retry_cooldown`` setting. Live checks do
+        not clear this; the channel going offline or a successful recording does.
+        """
+        used = self._quick_retries.get(channel_id, 0)
+        if ran_seconds < QUICK_RETRY_WINDOW and used < QUICK_RETRY_LIMIT:
+            attempt = used + 1
+            self._quick_retries[channel_id] = attempt
+            self._fail_cooldown[channel_id] = time.monotonic() + QUICK_RETRY_DELAY
+            message = (
+                f"Recording failed at start-up; retrying in {QUICK_RETRY_DELAY:g} s "
+                f"(attempt {attempt} of {QUICK_RETRY_LIMIT})."
+            )
+            logger.info("Channel %s: %s", channel_id, message)
+            self._db.add_event("info", "recording", message, channel_id)
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                return
+            # Fire just after the cooldown expires so _maybe_record lets it through.
+            loop.call_later(QUICK_RETRY_DELAY + 1.0, self._quick_retry_check, channel_id)
+            return
         self._fail_cooldown[channel_id] = time.monotonic() + int(
             self._settings.typed()["retry_cooldown"]
         )
+
+    def _quick_retry_check(self, channel_id: int) -> None:
+        if self._shutting_down or channel_id in self._active_by_channel:
+            return
+        self.schedule_channel_check(channel_id)
 
     def _active_tasks_add(self, task: asyncio.Task) -> None:
         self._bg_tasks.add(task)
@@ -1025,6 +1071,7 @@ class Monitor:
         )
 
         if status in {"completed", "stopped"}:
+            self._reset_fail_state(active.channel_id)
             self._db.set_channel_status(active.channel_id, "offline")
             level = "info"
             message = (
@@ -1042,8 +1089,9 @@ class Monitor:
                 f"{active.channel_name} — {error}"
             )
             if status == "failed":
-                self._fail_cooldown[active.channel_id] = time.monotonic() + int(
-                    cfg["retry_cooldown"]
+                self._set_fail_cooldown(
+                    active.channel_id,
+                    ran_seconds=time.monotonic() - active.started_monotonic,
                 )
         self._db.add_event(level, "recording", message, active.channel_id)
         logger.info(
@@ -1225,4 +1273,4 @@ class Monitor:
 
     def forget_channel(self, channel_id: int) -> None:
         self._channel_locks.pop(channel_id, None)
-        self._fail_cooldown.pop(channel_id, None)
+        self._reset_fail_state(channel_id)
