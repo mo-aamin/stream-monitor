@@ -215,15 +215,18 @@ def build_record_args(
         if use_lfs:
             args.append("--live-from-start")
             args.extend(LIVE_FROM_START_MERGE_ARGS)
-    if platform == "rumble" and cfg.get("rumble_live_from_start"):
-        args.append("--live-from-start")
 
     if extra:
         try:
-            args.extend(shlex.split(extra))
+            extra_args = shlex.split(extra)
         except ValueError:
             # Validation should have caught this; ignore rather than crash a recording.
-            pass
+            extra_args = []
+        if platform == "rumble":
+            # Rumble has no formats that can be downloaded from the start, so
+            # yt-dlp refuses to record at all when this flag is passed.
+            extra_args = [arg for arg in extra_args if arg != "--live-from-start"]
+        args.extend(extra_args)
 
     args.extend(["--print", "after_move:%(filepath)s"])
     args.extend(["-o", output_template, url])

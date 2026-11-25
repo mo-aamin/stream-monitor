@@ -274,6 +274,20 @@ tag, a `sha-…` tag, or a digest instead of `latest`.
 
 ## Changelog
 
+### v1.3.1 — 2026-11-24
+
+- **Deleting a channel no longer ruins its active recording.** The channel is
+  removed right away and its recording is stopped, but the video now gets the
+  same time to finish post-processing as the Stop button (60 minutes by
+  default, **Settings → Stop / finalize timeout**) instead of being killed
+  after 20 seconds.
+- **Rumble no longer uses "live from start".** Rumble streams cannot be
+  downloaded from the start, and turning the option on made every Rumble
+  recording fail. The option has been removed from Settings and Rumble always
+  records from the live point.
+- **Licensed under GPLv3.** Stream Monitor is now released under the GNU
+  General Public License, version 3 only. See [LICENSE](LICENSE).
+
 ### v1.3 — 2026-11-22
 
 - **New dark theme.** The web UI has a new flat dark look that replaces the
@@ -361,6 +375,18 @@ tag, a `sha-…` tag, or a digest instead of `latest`.
 ### v1.0
 
 - Initial release.
+
+## License
+
+Copyright (C) 2026 Mo Amin
+
+Stream Monitor is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License, version 3 only, as published by
+the Free Software Foundation (`GPL-3.0-only`). It is distributed without any
+warranty; see [LICENSE](LICENSE) for the full terms.
+
+Third-party tools and libraries included in the Docker image (such as yt-dlp,
+FFmpeg and Deno) keep their own licenses.
 
 ---
 

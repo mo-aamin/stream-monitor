@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import os
 
+import pytest
+
 from app.services.monitor import Monitor, find_output_by_prefix
 
 
@@ -398,6 +400,52 @@ def test_request_stop_returns_immediately_and_is_idempotent(ctx, tmp_path, monke
     assert remux_done
     assert ctx.db.get_recording(active.recording_id)["status"] == "stopped"
     assert ctx.monitor.request_stop(active.recording_id) is False
+
+
+@pytest.mark.parametrize("already_stopping", [False, True])
+def test_delete_channel_lets_recording_finish(ctx, tmp_path, monkeypatch, already_stopping):
+    import signal
+    from types import SimpleNamespace
+
+    from app.routes.api import delete_channel
+
+    process = _FakeYtdlp(exit_after_sigint=0.2)
+    active, register, remux_done = _setup_stop(ctx, tmp_path, monkeypatch, process, 0.2)
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(ctx=ctx)))
+    timeouts = []
+    real_stop = ctx.monitor.stop_recording
+
+    async def spy_stop(recording_id, timeout=None):
+        timeouts.append(timeout)
+        return await real_stop(recording_id, timeout=timeout)
+
+    monkeypatch.setattr(ctx.monitor, "stop_recording", spy_stop)
+
+    async def run():
+        register()
+        first = None
+        if already_stopping:
+            ctx.monitor.request_stop(active.recording_id)
+            first = active.stop_task
+            await asyncio.sleep(0)
+        response = await delete_channel(request, active.channel_id)
+        assert "background" in response["message"]
+        assert not active.task.done(), "deleting must not wait for post-processing"
+        assert ctx.db.get_channel(active.channel_id) is None
+        if first is not None:
+            assert active.stop_task is first
+        await active.stop_task
+
+    asyncio.run(run())
+    # None means the stop_timeout setting applies, not a shorter hardcoded limit.
+    assert timeouts == [None]
+    assert process.signals == [signal.SIGINT]
+    assert remux_done
+    recording = ctx.db.get_recording(active.recording_id)
+    assert recording["status"] == "stopped"
+    assert recording["channel_id"] is None
+    assert recording["filepath"] == remux_done[0]
+    assert active.recording_id not in ctx.monitor._active
 
 
 def test_live_check_keeps_cooldown_and_offline_clears_it(ctx):
