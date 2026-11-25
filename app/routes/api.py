@@ -165,8 +165,9 @@ async def delete_channel(request: Request, channel_id: int):
     channel = ctx.db.get_channel(channel_id)
     if channel is None:
         raise HTTPException(404, "Channel not found.")
-    if ctx.monitor.is_recording(channel_id):
-        await ctx.monitor.stop_channel_recording(channel_id, timeout=20.0)
+    # Do not wait: the recording finishes post-processing in the background
+    # (bounded by the stop_timeout setting), even though its channel is gone.
+    stopping = ctx.monitor.request_stop_channel(channel_id)
     ctx.db.delete_channel(channel_id)
     ctx.monitor.forget_channel(channel_id)
     ctx.db.add_event(
@@ -175,7 +176,10 @@ async def delete_channel(request: Request, channel_id: int):
         f"Channel removed: {platform_label(channel['platform'])} — {channel['identifier']}",
         channel_id,
     )
-    return {"ok": True, "message": "Channel removed."}
+    message = "Channel removed."
+    if stopping:
+        message += " Its recording will finish post-processing in the background."
+    return {"ok": True, "message": message}
 
 
 @router.post("/channels/{channel_id}/check")

@@ -2,6 +2,8 @@
 
 FROM python:3.12-slim-bookworm
 
+LABEL org.opencontainers.image.licenses="GPL-3.0-only"
+
 ARG DENO_VERSION=2.9.8
 ARG YTDLP_VERSION=
 ARG TARGETARCH
@@ -59,6 +61,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
         pip install --no-cache-dir "yt-dlp[default,curl-cffi]"; \
     fi
 
+COPY LICENSE ./
 COPY app ./app
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod -R a+rX /app \

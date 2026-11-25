@@ -32,7 +32,6 @@ def cfg():
         "merge_output_format": "mp4",
         "format_selector": "",
         "youtube_live_from_start": True,
-        "rumble_live_from_start": False,
         "write_info_json": False,
         "extra_ytdlp_args": "",
     }
@@ -180,6 +179,20 @@ def test_live_from_start_adds_shortest_merge(cfg):
     )
     assert "--live-from-start" not in off
     assert "--postprocessor-args" not in off
+
+
+def test_rumble_never_uses_live_from_start(cfg):
+    cfg = cfg | {
+        "rumble_live_from_start": True,  # removed setting, may linger in old databases
+        "extra_ytdlp_args": "--live-from-start --hls-use-mpegts",
+    }
+    rumble = build_record_args(cfg, "rumble", "https://rumble.com/embed/vabc/", "/out/x.mp4")
+    assert "--live-from-start" not in rumble
+    assert "--hls-use-mpegts" in rumble
+
+    off = cfg | {"youtube_live_from_start": False}
+    youtube = build_record_args(off, "youtube", "https://www.youtube.com/watch?v=abc", "/out/x.mp4")
+    assert "--live-from-start" in youtube
 
 
 def test_live_from_start_skipped_for_old_streams(cfg):

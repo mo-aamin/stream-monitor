@@ -381,14 +381,17 @@
     "delete-channel": async (button) => {
       const id = button.dataset.id;
       const name = button.dataset.name || "this channel";
-      if (!window.confirm(`Remove ${name} from monitoring?\n\nExisting recordings are kept.`)) {
+      const question =
+        `Remove ${name} from monitoring?\n\nExisting recordings are kept. ` +
+        "A recording in progress is stopped and finishes post-processing in the background.";
+      if (!window.confirm(question)) {
         return;
       }
       setBusy(button, true);
       try {
-        await api(`/api/channels/${id}`, { method: "DELETE" });
-        toast("Channel removed.", "success");
-        reloadSoon(400);
+        const data = await api(`/api/channels/${id}`, { method: "DELETE" });
+        toast((data && data.message) || "Channel removed.", "success");
+        reloadSoon(1200);
       } finally {
         setBusy(button, false);
       }

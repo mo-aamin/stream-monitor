@@ -118,3 +118,15 @@ def test_live_from_start_max_age_setting(ctx):
     assert ctx.settings.typed()["youtube_live_from_start_max_age"] == 0
     with pytest.raises(ValueError, match="between"):
         ctx.settings.update({"youtube_live_from_start_max_age": -1})
+
+
+def test_removed_rumble_live_from_start_is_ignored(ctx):
+    ctx.db.save_settings({"rumble_live_from_start": "1"})
+    ctx.settings.invalidate()
+    assert "rumble_live_from_start" not in ctx.settings.typed()
+
+
+def test_settings_page_has_no_rumble_live_from_start(client):
+    page = client.get("/settings").text
+    assert "rumble_live_from_start" not in page
+    assert "youtube_live_from_start" in page

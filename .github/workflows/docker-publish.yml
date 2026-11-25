@@ -111,6 +111,9 @@ jobs:
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
             type=match,pattern=v(.*),group=1
             type=sha,format=short
+          # Override GitHub's detected license, which cannot tell "only" apart.
+          labels: |
+            org.opencontainers.image.licenses=GPL-3.0-only
 
       - name: Build and push
         uses: docker/build-push-action@v7
