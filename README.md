@@ -5,49 +5,49 @@
 
 **Self-hosted live-stream recorder for YouTube, Twitch, Kick and Rumble.**
 
-Stream Monitor watches the channels you add and records their live streams
-automatically with [yt-dlp](https://github.com/yt-dlp/yt-dlp). It runs as a
-single Docker container — web UI, SQLite database, background monitor, and the
-whole recording pipeline included. No cloud service, no external database, and
-no Python, FFmpeg, Deno or yt-dlp to install on the host.
+Add the channels you care about, and Stream Monitor records every live stream
+as it starts, using [yt-dlp](https://github.com/yt-dlp/yt-dlp). Everything runs
+in a single Docker container: the web UI, SQLite database, background monitor
+and recording pipeline. You don't need a cloud service or an external database,
+and there's nothing to install on the host besides Docker. Recordings go
+straight to a folder you control.
 
-Recordings are written straight to a folder you control.
+Built with FastAPI, SQLite, yt-dlp, FFmpeg and Deno.
 
 ---
 
 ## Features
 
-- **Set and forget** — add a channel once; every live stream is recorded as it starts.
-- **Four platforms** — YouTube, Twitch, Kick and Rumble.
-- **One container** — FFmpeg, Deno, yt-dlp and `curl-cffi` are bundled in the image.
-- **Your files** — video recordings (MP4 by default) plus a plain SQLite database on your own disk.
-- **Web UI** — dashboard, channels, recording history, per-recording logs and settings.
-- **Multi-architecture** — runs natively on `linux/amd64` and `linux/arm64`.
-- **Simple stack** — one container, one SQLite file, no message broker.
+- **Set and forget:** add a channel once, and every live stream is recorded automatically.
+- **Four platforms:** YouTube, Twitch, Kick and Rumble.
+- **Everything bundled:** FFmpeg, Deno, yt-dlp and `curl-cffi` come in the image.
+- **Your files:** video recordings (MP4 by default) and a plain SQLite database, on your own disk.
+- **Web UI:** dashboard, channels, recording history, per-recording logs and settings.
+- **Multi-architecture:** runs natively on `linux/amd64` and `linux/arm64`.
 
 ---
 
 ## Screenshots
 
-A look at the main views. Click any image to open it full size.
+Click any image to see it full size.
 
-**Dashboard** — live channels, active recordings, recent captures and runtime versions.
+**Dashboard:** live channels, active recordings, recent captures and runtime versions.
 
 <a href="screenshots/screenshot1.png"><img src="screenshots/screenshot1.png" alt="Dashboard showing live channels, active recordings and runtime versions" width="720"></a>
 
-**Channels** — add channels individually or in bulk, with per-platform status.
+**Channels:** add channels one at a time or in bulk, and see each platform's status.
 
 <a href="screenshots/screenshot2.png"><img src="screenshots/screenshot2.png" alt="Channels page with the add form and channel list" width="720"></a>
 
-**Recordings** — recording history with status, duration, size, filters and actions.
+**Recordings:** history with status, duration, size, filters and actions.
 
 <a href="screenshots/screenshot3.png"><img src="screenshots/screenshot3.png" alt="Recordings page with recording history and filters" width="720"></a>
 
-**Activity & Logs** — channel checks, settings changes and the application log.
+**Activity & Logs:** channel checks, settings changes and the application log.
 
 <a href="screenshots/screenshot4.png"><img src="screenshots/screenshot4.png" alt="Activity and application log page" width="720"></a>
 
-**Settings** — tool paths, platform access, monitoring interval and recording options.
+**Settings:** tool paths, platform access, monitoring interval and recording options.
 
 <a href="screenshots/screenshot5.png"><img src="screenshots/screenshot5.png" alt="Settings page with tool paths, platform access and recording options" width="720"></a>
 
@@ -55,9 +55,10 @@ A look at the main views. Click any image to open it full size.
 
 ## Quick start
 
-You need Docker with the Compose v2 plugin (`docker compose version`), and a
-host that stays awake — a Linux server, NAS, or always-on mini PC. Docker
-Desktop on a laptop works for testing, but it pauses when the machine sleeps.
+**Requirements:** Docker with the Compose v2 plugin (check with
+`docker compose version`), on a machine that stays awake, such as a Linux
+server, NAS or always-on mini PC. Docker Desktop on a laptop works for testing,
+but it pauses when the laptop sleeps.
 
 ### 1. Create the folders
 
@@ -91,10 +92,10 @@ services:
 ```
 
 The `logging` block caps Docker's own copy of the container output at about
-30 MB. Without it, Docker's default log driver grows forever. If you use
-`docker run` instead of Compose, pass
-`--log-opt max-size=10m --log-opt max-file=3`, or set the same defaults for
-every container in the host's `/etc/docker/daemon.json`.
+30 MB, because Docker's default log grows forever. If you use `docker run`
+instead of Compose, pass `--log-opt max-size=10m --log-opt max-file=3`. You can
+also set the same defaults for every container in the host's
+`/etc/docker/daemon.json`.
 
 ### 3. Start it
 
@@ -105,20 +106,20 @@ sudo docker compose up -d
 
 ### 4. Open the web UI
 
-Browse to **`http://<server-ip>:8080`**, open **Channels**, and add a channel
-name, `@handle`, or URL. The first live check runs immediately.
+Go to **`http://<server-ip>:8080`**, open **Channels**, and add a channel name,
+`@handle` or URL. The first live check runs right away.
 
 > **Port already in use?** Change the left side of the mapping, for example
 > `"8000:8080"`, then run `sudo docker compose up -d` again.
 >
-> **Firewall?** Allow the port if needed, e.g. `sudo ufw allow 8080/tcp`.
+> **Firewall?** Allow the port if needed, for example `sudo ufw allow 8080/tcp`.
 
 ---
 
 ## Updating the image
 
 New images are published to GitHub Container Registry
-(`ghcr.io/mo-aamin/stream-monitor`). To pick up the latest one:
+(`ghcr.io/mo-aamin/stream-monitor`). To update:
 
 ```bash
 cd /opt/stream-monitor
@@ -126,32 +127,31 @@ sudo docker compose pull
 sudo docker compose up -d
 ```
 
-That is the whole update. `pull` downloads the new image and `up -d` recreates
-the container only if the image changed. Your `data` and `recordings` folders
-are bind mounts, so they are untouched.
+`pull` downloads the latest image, and `up -d` recreates the container only if
+the image changed. Your `data` and `recordings` folders are bind mounts, so
+updating leaves them alone.
 
-> `docker compose restart` and `docker compose up -d` **without** `pull` will
-> keep running the old image. Always pull first.
->
-> Recreating the container stops it. If a recording is in progress, allow the
-> shutdown grace period to finish muxing — or update when nothing is recording.
+> **Always pull first.** `docker compose restart` and `docker compose up -d`
+> on their own keep running the old image. Recreating the container also stops
+> it, so if a recording is in progress, give it the shutdown grace period to
+> finish muxing, or update when nothing is recording.
 
 > **Moving from Docker Hub?** Images are no longer published to
 > `moamin1/stream-monitor`. Change the `image:` line in your
 > `docker-compose.yml` to `ghcr.io/mo-aamin/stream-monitor:latest`, then run
 > the `pull` and `up -d` commands above. Your `data` and `recordings` folders
-> are unaffected.
+> aren't affected.
 
-Verify what is running:
+To check what's running:
 
 ```bash
 sudo docker compose images
 curl -fsS http://localhost:8080/healthz
 ```
 
-The `/healthz` response reports the application version and monitor state. The
-version string only changes between releases; the image digest is the reliable
-way to confirm a new build.
+`/healthz` reports the application version and the monitor state. The version
+string only changes between releases, so check the image digest to confirm a
+new build.
 
 ---
 
@@ -162,25 +162,24 @@ way to confirm a new build.
 | `/opt/stream-monitor/data` | `/data` | SQLite database, application log, per-recording yt-dlp logs |
 | `/opt/stream-monitor/recordings` | `/recordings` | Recorded video files |
 
-**Log size is bounded.** The application log (`app.log`) rotates at 2 MB and
-keeps 3 older copies. Per-recording yt-dlp logs are capped at 10 MB each and
-are deleted after 30 days; both limits can be changed under
-**Settings → Logs** (set the retention to `0` to keep them forever). Deleting
-a recording entry also deletes its log. Video files are never removed
-automatically.
+**Logs have size limits.** The application log (`app.log`) rotates at 2 MB and
+keeps 3 older copies. Each per-recording yt-dlp log is capped at 10 MB and
+deleted after 30 days. You can change both limits under **Settings → Logs**
+(set retention to `0` to keep logs forever). Deleting a recording entry also
+deletes its log. Video files are never deleted automatically.
 
-**Backups:** stop the container before copying `data` (or use SQLite's online
-backup). The `recordings` folder can be copied at any time; an active file may
-end in `.part`.
+**Backups:** stop the container before copying `data`, or use SQLite's online
+backup. You can copy `recordings` at any time; a file that's still recording
+may end in `.part`.
 
-To reset everything, stop the container and remove both folders. The database
-is recreated on the next start.
+**Reset:** stop the container and delete both folders. The database is
+recreated on the next start.
 
 ---
 
 ## Configuration
 
-Environment variables in the Compose file:
+Set these environment variables in the Compose file:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -191,14 +190,15 @@ Environment variables in the Compose file:
 | `DATA_DIR` | `/data` | Database and log location inside the container. |
 | `RECORDINGS_DIR` | `/recordings` | Recording location inside the container. |
 
-Everything else — yt-dlp options, cookies file, proxy, check interval, filename
-template, format selector — is configured in the web UI under **Settings**.
+Everything else is set in the web UI under **Settings**, including yt-dlp
+options, the cookies file, proxy, check interval, filename template and format
+selector.
 
 ### Permissions
 
-The container drops privileges to `PUID:PGID` (default `1000:1000`). If the app
-cannot write to `/opt/stream-monitor`, add these lines to the service's
-`environment` list and use your host user's IDs:
+The container runs as `PUID:PGID` (default `1000:1000`). If the app can't write
+to `/opt/stream-monitor`, add your host user's IDs to the service's
+`environment` list:
 
 ```yaml
     environment:
@@ -207,8 +207,8 @@ cannot write to `/opt/stream-monitor`, add these lines to the service's
       - PGID=1000
 ```
 
-Use `id -u` and `id -g` on the host to find your values, then
-`sudo chown -R <PUID>:<PGID> /opt/stream-monitor` if needed.
+Run `id -u` and `id -g` on the host to find your IDs. If needed, run
+`sudo chown -R <PUID>:<PGID> /opt/stream-monitor` too.
 
 ---
 
@@ -221,23 +221,23 @@ Use `id -u` and `id -g` on the host to find your values, then
 | **Kick** | Channel name or URL | Requires browser impersonation, enabled by default and backed by `curl-cffi`. |
 | **Rumble** | Channel name, `c/name`, `user/name`, or URL | Live streams are resolved from the channel's `/live` page; a direct live video URL also works. |
 
-Recordings are **not** playable or downloadable through the web UI. Browse the
-`recordings` folder on the host, or point it at a NAS mount.
+**Cookies (optional):** mount a Netscape-format `cookies.txt` read-only and set
+its path in **Settings → Cookies file**.
 
-Optional: mount a Netscape-format `cookies.txt` read-only and set its path in
-**Settings → Cookies file**.
+**Watching recordings:** you can't play or download recordings in the web UI.
+Open the `recordings` folder on the host, or point it at a NAS mount.
 
 ---
 
 ## Security
 
-**Stream Monitor has no built-in authentication.** Every page and API endpoint
-is open to anyone who can reach the port. Run it on a trusted LAN, behind a VPN,
-or behind an authenticating TLS reverse proxy. Do not expose it directly to the
-internet.
+**Stream Monitor has no built-in authentication.** Anyone who can reach the
+port can use every page and API endpoint. Run it on a trusted LAN, behind a
+VPN, or behind a TLS reverse proxy that handles authentication. Never expose it
+directly to the internet.
 
-The app only accepts channel URLs for the four supported platforms, and file
-deletion is confined to the mounted recordings directory.
+The app only accepts channel URLs for the four supported platforms, and it can
+only delete files inside the mounted recordings folder.
 
 ---
 
@@ -254,7 +254,7 @@ deletion is confined to the mounted recordings directory.
 | New image did not apply | Run `pull` then `up -d`; `restart` alone does not update |
 | Database is locked | Run only one container against a given `data` folder |
 
-Health endpoint: `GET /healthz` on port `8080` inside the container.
+The health endpoint is `GET /healthz` on port `8080` inside the container.
 
 ---
 
@@ -267,8 +267,8 @@ Health endpoint: `GET /healthz` on port `8080` inside the container.
 | `sha-<short>` | Every build, immutable | `linux/amd64`, `linux/arm64` |
 | `1.0`, `1.2.0`, … | Git release tags (`v1.0`, `v1.2.0`) | `linux/amd64`, `linux/arm64` |
 
-Use `latest` for normal deployments. For reproducible installs, pin a version
-tag, a `sha-…` tag, or a digest instead of `latest`.
+Use `latest` for normal installs. For reproducible installs, pin a version tag,
+a `sha-…` tag or a digest instead.
 
 ---
 
@@ -387,7 +387,3 @@ warranty; see [LICENSE](LICENSE) for the full terms.
 
 Third-party tools and libraries included in the Docker image (such as yt-dlp,
 FFmpeg and Deno) keep their own licenses.
-
----
-
-Built with FastAPI, SQLite, yt-dlp, FFmpeg and Deno.
